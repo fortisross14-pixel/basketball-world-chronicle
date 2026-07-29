@@ -1,117 +1,332 @@
-# Basketball World Chronicle — Technical Design v0.3
+# Basketball World Chronicle — Technical Design v0.4
 
-## Revision v0.3 — React Foundation and Compact NCAA Model
+## 1. Product goal
 
-This revision converts the prototype into a Vite + React application and deliberately reduces the college universe from a complete Division I directory to a curated, simulation-relevant pool.
+Basketball World Chronicle is an observer-driven global basketball history simulator. Its main value is not tactical control of one team; it is the creation of navigable careers, dynasties, disappointments, transfers, draft classes, competition histories and cross-league debates.
 
-### Technology and deployment
+The central loop is:
 
-- React single-page application
-- Vite development and production build
-- Static GitHub Pages deployment
-- Repository-safe relative asset base (`./`)
-- GitHub Actions workflow on pushes to `main`
-- No backend dependency in the current foundation
+1. Advance the universe by one week, four weeks or to year review.
+2. Inspect results, standings, leaders and stories.
+3. Open any competition, team or player.
+4. Follow permanent annual histories and honors.
+5. Stop at year review.
+6. Run the draft, player market, retirements, promotion/relegation and new spawns.
+7. Begin the next season.
 
-### Final top-level navigation
+## 2. Technical platform
 
-- **World**
-- **Results**
-- **Tournaments**
-- **Teams**
-- **Players**
-- **Market**
-  - Transfers
-  - Draft
-  - Spawn
-- **Statistics**
-- **The Global Five**
-- **Almanac**
+- Vite single-page application.
+- React UI.
+- Pure JavaScript simulation engine.
+- Static GitHub Pages deployment.
+- No backend dependency in v0.4.
+- Deterministic seeded opening universe plus persistent in-memory state during play.
 
-### Initial team structure
+Key files:
 
-| Layer | Teams | Named players per team | Purpose |
-|---|---:|---:|---|
-| NBA | 30 | 10 | Highest professional level, draft and transaction market |
-| NBA G League | 14 | 10 | Development, releases and alternate entry route |
-| NCAA Division I pool | 200 | 5 | Starting-five-only prospect pipeline |
-| Europe | 52 | 10 | EuroLeague, domestic leagues and promotion/relegation |
-| Other professional leagues | 16 | 10 | Australia, Japan, China, Brazil and Argentina |
-| **Total** | **312** | — | **2,120 initial active players** |
+```text
+src/App.jsx                    UI and Chronicle detail pages
+src/styles.css                 visual system and responsive layouts
+src/game/universe.js           generation, simulation, draft and market engine
+src/data/teamData.js           real team names and color palettes
+src/data/competitionData.js    competition definitions and hierarchy
+scripts/validate.mjs           multi-season balance and integrity checks
+```
 
-The 200 NCAA programs are selected for recognizability, competitive relevance, geographic reach, and conference variety. The model is intentionally not a complete representation of every Division I institution.
+## 3. Navigation architecture
 
-### NCAA starting-five abstraction
+Global simulation controls sit above the menus. They are not a navigation section.
 
-Every NCAA program has exactly five named active players:
+Primary menus:
+
+- World
+- Results
+- Tournaments
+- Teams
+- Players
+- Market
+- Statistics
+- The Global Five
+- Almanac
+
+Detail pages are opened inside the main application:
+
+- Player page
+- Team page
+- Competition page
+
+Every table and ranking uses click-through navigation so the user can move naturally from a draft pick to his player page, from the player to his former team, and from that team to a competition history.
+
+## 4. Universe structure
+
+### Opening population
+
+| Layer | Teams | Players per team | Total players |
+|---|---:|---:|---:|
+| NBA | 30 | 10 | 300 |
+| NBA G League | 14 | 10 | 140 |
+| NCAA selected Division I | 200 | 5 | 1,000 |
+| European and international professional teams | 158 | 10 | 1,580 |
+| **Total** | **402** | — | **3,020** |
+
+Every team also has one generated head coach.
+
+### NCAA abstraction
+
+The NCAA contains 200 selected Division I programs. Each school has only its relevant starting five:
 
 ```text
 PG · SG · SF · PF · C
 ```
 
-There is no named bench in the initial version. College results are calculated from those five players, coach/program strength, form and tournament context. This keeps the draft pipeline deep without creating thousands of low-relevance bench careers.
+The 1,000 players are divided into four equal age cohorts:
 
-College roster rules:
+```text
+250 age 18
+250 age 19
+250 age 20
+250 age 21
+```
 
-- Exactly five active players at all times.
-- Exactly one player at each position.
-- Ages 18–22 only.
-- New replacements always spawn at age 18.
-- A replacement fills the exact position vacated by a drafted, transferred or age-out player.
-- NCAA generation is 80% American and 20% international.
-- NCAA players can declare for the draft beginning at age 19.
-- Any player older than 22 leaves college for the G League, an international team, free agency or retirement.
+This produces roughly 250 scheduled college exits every season before a small number of early declarations.
 
 ### Professional roster rule
 
-Every professional team has exactly 10 active players. The active roster should normally contain two players at each position, although transactions can temporarily create imbalance before the year-end roster rebalance.
+Every professional team has exactly 10 active players. The normal roster target is two players at each position, although market movement can temporarily create imbalance before the annual roster fill.
 
-The 10-player limit applies to:
+## 5. Competition hierarchy
+
+### North America
 
 - NBA
-- G League
-- EuroLeague/domestic European clubs
-- Asian, Australian and South American professional clubs
+- NBA G League
+- NCAA Division I
+- NCAA Tournament
+- CEBL Canada
+- CEBL Championship Weekend
 
-### Real-world identity policy
+### Continental Europe
 
-The foundation uses real team and school names for NBA, selected NCAA programs, EuroLeague clubs and prominent domestic teams. It uses team-specific primary color palettes and text initials, but does not bundle official logos or other licensed artwork.
+- EuroLeague
+- EuroCup
 
-Color data is stored in `src/data/teamData.js` and is intentionally editable. Marquee teams have individually assigned primary colors; less prominent NCAA entries can be progressively verified and refined without changing the simulation model.
+### Detailed European countries
 
-### European promotion and relegation
+Each detailed country can contain a primary league, domestic cup, supercup and second tier where appropriate.
 
-Selected European countries contain both top-tier and second-tier clubs. At year rollover:
+- Spain: Liga ACB, Copa del Rey, Supercopa Endesa, Primera FEB
+- Greece: Greek League, Greek Cup, Greek Super Cup, Greek A2
+- Turkey: Turkish BSL, Turkish Cup, Presidents Cup, Turkish TBL
+- Italy: Lega Basket Serie A, Italian Cup, Italian Super Cup, Serie A2
+- France: LNB Pro A, French Cup, Champions Match, Pro B
+- Germany: Basketball Bundesliga, German Cup, Champions Cup, ProA
+- Serbia: Adriatic League participation, Serbian Cup, Serbian Super Cup, KLS
+- Lithuania: LKL, King Mindaugas Cup, Lithuanian Super Cup, NKL
+- Israel: Premier League, State Cup, Winner Cup, National League
+- Russia: VTB United League, Russian Cup, VTB Super Cup, Superleague
 
-1. The lowest eligible non-EuroLeague top-tier club is selected.
-2. The highest-performing second-tier club is selected.
-3. Their domestic competition and tier values are swapped.
-4. Player competition history continues under the promoted/relegated team identity.
+### Detailed non-European countries
 
-EuroLeague participants are protected from automatic prototype relegation because continental licensing and qualification rules will become a separate system later.
+- Argentina: Liga Nacional, Copa Super 20, Supercopa
+- Brazil: NBB, Copa Super 8, Supercopa
+- Australia: NBL, NBL Cup, Champions Game
+- Canada: CEBL and Championship Weekend
+- China: CBA, CBA Cup, CBA Super Cup
 
-### Permanent player identity
+### High-level simulation
 
-Assigned once at player creation and never changed:
+- Japan
+- South Korea
+- Philippines
+- Croatia
+- Slovenia
+- Poland
+- Belgium/Netherlands
+- African Basketball League
+
+## 6. Competition page data model
+
+Each competition stores annual season objects:
+
+```js
+{
+  year,
+  competitionId,
+  championTeamId,
+  champion,
+  runnerUpTeamId,
+  runnerUp,
+  mvp,
+  finalsMvp,
+  leaders: {
+    points,
+    rebounds,
+    assists,
+    steals,
+    blocks
+  },
+  standings: [],
+  playerStats: []
+}
+```
+
+The page has four tabs:
+
+### Overview
+
+- Current standings
+- Current top scorer
+- Current top rebounder
+- Current top playmaker
+
+### Seasons
+
+Annual rows containing:
+
+- Champion
+- Runner-up
+- MVP
+- Finals or playoff MVP
+- Points leader
+- Rebounds leader
+- Assists leader
+
+### Rankings
+
+All-time top 10:
+
+- Total points
+- Total rebounds
+- Total assists
+- Team wins
+- Team titles
+
+### Teams
+
+Current participating teams with rating, record and title count.
+
+## 7. Team page data model
+
+Each team stores:
+
+```js
+{
+  rosterIds,
+  coachId,
+  rating,
+  rawRating,
+  seasonRecords,
+  history,
+  honors,
+  transactions,
+  localMinimum
+}
+```
+
+### Team page tabs
+
+- Overview
+- Seasons
+- Honors
+- Transactions
+
+The annual breakdown contains:
+
+- Year
+- Domestic competition
+- Wins and losses
+- Team rating
+- Coach
+- Titles won
+
+The trophy cabinet stores every competition championship independently.
+
+## 8. Player page data model
+
+Permanent creation data:
 
 - Rarity
 - Base ability
 - Career length
-- Career profile and multiplier array
+- Career profile
+- Career multiplier curve
 - Position
 - Height
 - Body type
 - Basketball role
 - Nationality
-- First team and development route
+- First team
 
-Current ability remains:
+Annual performance data:
+
+- Team
+- Competition
+- Age
+- Current ability
+- Games
+- Minutes
+- PPG
+- RPG
+- Offensive rebounds
+- Defensive rebounds
+- APG
+- Steals
+- Blocks
+- FG%
+- 3P%
+- FT%
+- Honors
+
+Career-specific data:
+
+- NBA Draft year
+- Pick
+- Drafting team
+- Draft origin
+- NBA rights holder
+- First NBA season
+- Career timeline
+- Permanent honors list
+
+### Player page tabs
+
+- Overview
+- Career
+- Honors
+- Timeline
+
+This structure supports careers such as:
 
 ```text
-base ability × career-year multiplier × annual shape
+NCAA star
+→ drafted by San Antonio
+→ two limited NBA seasons
+→ released
+→ signs with Panathinaikos
+→ EuroLeague MVP
+→ later NBA return or European retirement
 ```
 
-Supported career profiles:
+No part of that journey is lost when the player changes teams.
+
+## 9. Player ability model
+
+### Permanent identity
+
+```text
+rarity + base ability + career length + career profile
+```
+
+These never change.
+
+### Annual current ability
+
+```text
+current ability = base × career-year multiplier × annual shape
+```
+
+Career profiles:
 
 - Young prodigy
 - Classic prime
@@ -120,886 +335,256 @@ Supported career profiles:
 - Durable veteran
 - Volatile talent
 
-### Player spawning
+Annual shape normally falls between 0.95 and 1.01.
 
-All newly generated players are 18.
+### Rarity bands
+
+| Rarity | Base range | Typical career |
+|---|---:|---:|
+| Common | 66–72 | 6–10 years |
+| Uncommon | 73–78 | 7–11 years |
+| Rare | 79–83 | 8–12 years |
+| Epic | 84–88 | 10–13 years |
+| Legend | 89–93 | 12–15 years |
+| Generational | 94–98 | 14–18 years |
+
+## 10. League-calibrated talent generation
+
+Talent is not distributed uniformly.
+
+### NBA
+
+- Greatest concentration of Rare, Epic, Legend and Generational players.
+- Highest roster depth.
+- Positive league-strength adjustment in global team ratings.
+
+### EuroLeague
+
+- Second strongest population.
+- Top clubs can exceed the weakest NBA teams.
+- Less elite depth than the NBA across all roster spots.
+
+### Domestic professional leagues
+
+- Strong local players.
+- A limited number of elite imports.
+- Top teams can produce EuroLeague-level lineups.
+
+### NCAA
+
+- Mostly Common and Uncommon players.
+- A smaller group of Rare prospects.
+- Occasional Epic, Legend or Generational prospect.
+- Negative team-level context adjustment prevents an NCAA roster from being ranked as the best professional team in the world.
+
+## 11. Team rating model
+
+Two values are stored:
+
+### Raw rating
+
+Weighted current ability of the best rotation players.
+
+### World rating
 
 ```text
-NCAA: 80% USA / 20% international
-Other team: 80% team country / 20% foreign
+raw rotation rating
++ coach contribution
++ league-strength context
 ```
 
-No player spawns directly into the NBA. NBA entry occurs through the draft, trades, free agency or later movement.
+League context is intentionally strong enough to represent NBA depth while still allowing a top EuroLeague club to exceed a weak NBA roster.
 
-### Market architecture
+## 12. Local-player and coach identity
 
-**Transfers** stores NBA releases, professional transfers, NCAA exits, roster cuts and retirements.
+Professional teams require at least five local players.
 
-**Draft** combines NCAA, G League and international prospects. The annual draft contains 60 picks. Selecting a player moves him to the drafting NBA team and forces a corresponding roster release when necessary.
+- Non-NBA local identity is the team’s country.
+- NBA local identity is USA/Canada.
+- Replacement academies prioritize local generation.
+- A foreign player cannot join a full roster if doing so would break the quota.
+- Most coaches are generated from the team’s country.
 
-**Spawn** records every age-18 replacement and its team, route, nationality, position and rarity.
+This prevents long-term international rosters from becoming dominated by former NCAA players.
 
-### Year rollover sequence
+## 13. Draft and rights pipeline
 
-```text
-1. Stop at Year Review.
-2. Allow inspection of the completed season.
-3. Run the 60-pick NBA Draft.
-4. Run European promotion/relegation.
-5. Age players and advance career curves.
-6. Retire players whose curves are complete.
-7. Remove NCAA players older than 22.
-8. Fill each NCAA position vacancy with an 18-year-old.
-9. Return every professional roster to 10 players.
-10. Recalculate team ratings and open the new year.
-```
+### Draft pool
 
-### Current foundation boundary
+- Scheduled NCAA exits
+- Selected early NCAA declarations
+- Elite international prospects aged 19–22
 
-The React build includes the full global data model, menus, filters, player/team modals, weekly advancement, draft, spawning, retirements, roster constraints and promotion/relegation. The next major layer is competition-specific scheduling and results: NBA regular season/play-in/playoffs, NCAA conferences and national tournament, EuroLeague format, domestic playoffs, awards, contracts, salary cap and deeper roster AI.
+### Draft
 
----
+- 60 picks
+- Two rounds
+- Two selections per NBA team
 
-## 1. Product Goal
+### Signing decision
 
-Basketball World Chronicle is a history-first global basketball simulation. The player acts as an observer and universe chronicler rather than controlling one team. The core loop is:
+A drafted player does not automatically join the NBA.
 
-1. Advance the calendar.
-2. Observe games, tournaments, careers, trades, transfers, and drafts.
-3. Inspect statistics and narratives.
-4. Compare leagues, teams, players, draft classes, and eras.
-5. Stop at season end before rollover so the completed year can be reviewed.
+Decision factors:
 
-The initial implementation focuses on NBA, G League, NCAA, EuroLeague, and six fully simulated European domestic leagues. National teams are a second-phase system.
+- Current ability
+- Draft round
+- NBA team vacancy
+- Comparison with the weakest roster player
+- Random uncertainty
 
----
+Each team can add zero, one or two drafted players.
 
-## 2. Navigation Architecture
+### Draft rights
 
-Primary menus:
+Every pick receives:
 
-- **World** — global overview, rankings, current stories, league strength.
-- **Results** — chronological game results across all competitions.
-- **Tournaments** — geographic hierarchy and competition pages.
-- **Teams** — searchable team directory and team histories.
-- **Players** — searchable player directory and career pages.
-- **Market** — Transactions, Draft, and Spawn as one connected player-movement hub.
-- **Statistics** — league and global statistical leaderboards.
-- **The Global Five** — weekly narrative magazine.
-- **Almanac** — historical records and year-by-year summaries.
-- **Hall of Fame** — multiple greatness categories.
-- **Saves** — three local slots initially; cloud saves later.
-
-### Tournaments hierarchy example
-
-- World
-  - USA
-    - NBA
-    - NBA G League
-    - NCAA
-  - Europe
-    - EuroLeague
-    - EuroCup
-    - Spain — Liga ACB
-    - Turkey — BSL
-    - Greece — GBL
-    - Italy — LBA
-    - France — LNB Pro A
-    - Germany — BBL
-  - Other Regions
-    - Australia
-    - China
-    - Japan
-    - Israel
-    - Lithuania
-    - Adriatic League
-    - South America
-
-Clicking a region reveals its competitions. Clicking a competition opens its competition hub.
-
----
-
-## 3. Core Simulation Calendar
-
-The simulation advances weekly.
-
-### User controls
-
-- Simulate one week
-- Simulate four weeks
-- Simulate to next checkpoint
-- Simulate to end of regular season
-- Simulate to end of year
-- Move to next year
-
-### Hard Chronicle rule
-
-`Simulate to end of year` stops in the final review week. It never automatically opens the next season. Roster aging, retirements, new prospects, contract rollovers, and archive resets only occur after the user clicks **Move to next year**.
-
-### NBA checkpoints
-
-1. Opening week
-2. Christmas week
-3. Trade deadline
-4. All-Star break
-5. End of regular season
-6. Play-in
-7. Playoffs
-8. NBA Finals
-9. Draft lottery
-10. NBA Draft
-11. Free agency
-12. Year review
-
-### NCAA checkpoints
-
-1. Opening tournaments
-2. Conference play
-3. Conference tournaments
-4. Selection Sunday
-5. NCAA Tournament
-6. Final Four
-7. Draft declaration deadline
-
-### Europe checkpoints
-
-1. Domestic season opening
-2. EuroLeague opening
-3. Midseason transfer window
-4. Domestic cups
-5. EuroLeague playoffs
-6. Final Four
-7. Domestic playoffs/finals
-8. Summer transfer market
-
----
-
-## 4. Data Model
-
-### Player
-
-```ts
-interface Player {
-  id: string;
-  name: string;
-  nationality: string;
-  birthYear: number;
-  age: number;
-  teamId: string | null;
-  leagueId: string;
-  status: 'active' | 'retired' | 'free-agent' | 'prospect';
-
-  primaryPosition: 'PG' | 'SG' | 'SF' | 'PF' | 'C';
-  secondaryPositions: Array<'PG' | 'SG' | 'SF' | 'PF' | 'C'>;
-  heightCm: number;
-  weightKg: number;
-  bodyType: 'slim' | 'normal' | 'muscular' | 'heavy';
-
-  primaryRole: PlayerRole;
-  secondaryRole?: PlayerRole;
-
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legend' | 'generational';
-  baseTalent: number;
-  potential: number;
-  currentAbility: number;
-  annualShape: number;
-  careerPhase: 'prospect' | 'rookie' | 'prime' | 'veteran' | 'decline';
-
-  attributes: PlayerAttributes;
-  tendencies: PlayerTendencies;
-  personality: PlayerPersonality;
-
-  contract?: Contract;
-  draft?: DraftProfile;
-  seasonStats: SeasonStatLine[];
-  careerEvents: CareerEvent[];
+```js
+{
+  playerId,
+  teamId,
+  acquiredYear,
+  active
 }
 ```
 
-### Player roles
-
-- Primary creator
-- Secondary creator
-- Floor general
-- Three-level scorer
-- Three-point shooter
-- Movement shooter
-- Slasher
-- Low-post scorer
-- Face-up big
-- Rim runner
-- Stretch big
-- Perimeter stopper
-- Rim protector
-- Rebounder
-- Two-way wing
-- Sixth man
-- Utility role player
-
-Roles are not positions. A 203 cm SF can be a primary creator. A 211 cm C can be a shooter or a low-post scorer.
-
-### Player attributes
-
-Offense:
-
-- Inside scoring
-- Post scoring
-- Mid-range
-- Three-point shooting
-- Free throws
-- Ball handling
-- Passing
-- Offensive intelligence
-- Off-ball movement
-- Screen setting
-
-Defense:
-
-- Perimeter defense
-- Interior defense
-- Rim protection
-- Steal instinct
-- Defensive intelligence
-
-Physical:
-
-- Speed
-- Acceleration
-- Vertical
-- Strength
-- Stamina
-- Durability
-- Agility
-
-Mental/contextual:
-
-- Clutch
-- Consistency
-- Work ethic
-- Leadership
-- Adaptability
-- Playoff composure
-- Loyalty
-- Market appeal
-- Usage tolerance
-- Ball dominance
-
----
-
-## 5. Height and Body Type System
-
-Height and body shape modify how attributes translate into game outcomes. They should not directly dictate talent.
-
-### Height effects
-
-- Taller players finish and contest shots more effectively near the rim.
-- Shorter players have a lower natural finishing floor but may gain speed, handling, and point-of-attack advantages.
-- Extreme size creates matchup value but also mobility costs.
-- Positional size affects rebounding, shot quality, switching, and foul rate.
-
-### Body type effects
-
-#### Slim
-
-- Bonuses: acceleration, agility, stamina, off-ball movement.
-- Penalties: contact finishing, post defense, physical durability.
-- Best fit: shooters, tall creators, mobile forwards.
-
-#### Normal
-
-- No major modifier.
-- Most versatile developmental profile.
-
-#### Muscular
-
-- Bonuses: strength, contact finishing, perimeter resistance, durability.
-- Small penalties: acceleration and long-duration stamina.
-- Best fit: slashing guards, two-way wings, power forwards.
-
-#### Heavy
-
-- Bonuses: post position, screen quality, defensive rebounding, interior leverage.
-- Penalties: transition speed, perimeter defense, stamina, injury recovery.
-- A heavy PG or SG is not automatically bad, but must compensate with elite skill, strength, or half-court creation. The archetype is viable as a deliberate outlier, not a normal build.
-
-### Example distinction: low-post centers
-
-A low-post scorer is evaluated through a composite rather than one rating.
-
-```text
-Post Threat =
-  30% post scoring
-  18% strength
-  12% offensive intelligence
-  10% touch / inside scoring
-  10% passing out of double teams
-  8% height advantage
-  7% consistency
-  5% free-throw pressure
-```
-
-A Marc Gasol-like center may have high post craft, passing, intelligence, and shooting but only moderate athletic dominance. A Shaquille O'Neal-like center combines elite strength, inside scoring, size, and foul pressure. Both share a role but produce very different statistical and tactical outcomes.
-
----
-
-## 6. Statistical Model
-
-### Core player box score
-
-- Games
-- Starts
-- Minutes
-- Points
-- PPG
-- Field goals made/attempted
-- FG%
-- Two-point percentage
-- Three-point percentage
-- Free-throw percentage
-- Offensive rebounds
-- Defensive rebounds
-- Total rebounds
-- RPG
-- Assists
-- APG
-- Steals
-- Blocks
-- Turnovers
-- Personal fouls
-- Plus/minus
-
-### Advanced summary statistics
-
-- Usage rate
-- True shooting percentage
-- Assist percentage
-- Rebound percentage
-- Turnover percentage
-- Offensive rating
-- Defensive rating
-- Estimated impact
-- Win shares / historical value proxy
-
-The game engine can use simplified internal calculations while displaying credible outputs.
-
-### Team statistics
-
-- Pace
-- Offensive rating
-- Defensive rating
-- Net rating
-- Points per game
-- Shooting splits
-- Rebound rate
-- Assist rate
-- Turnover rate
-- Opponent shooting
-- Clutch record
-- Home/away record
-
----
-
-## 7. Game Simulation Engine
-
-Simulation should generate possessions rather than only calculating a final score.
-
-### Step 1 — Rotation and minutes
-
-The coach allocates 240 regulation minutes based on:
-
-- Current ability
-- Role
-- fatigue
-- health
-- coach rotation preference
-- development priority
-- contract/status
-- matchup
-
-### Step 2 — Lineup evaluation
-
-For each lineup:
-
-- Creation
-- Shooting gravity
-- Rim pressure
-- Interior scoring
-- Offensive rebounding
-- Perimeter defense
-- Interior defense
-- Rim protection
-- Transition ability
-- Size
-- chemistry
-
-### Step 3 — Possession result
-
-Each possession selects:
-
-1. Offensive initiator
-2. Action type
-3. Finisher
-4. Defensive matchup/help
-5. Result
-
-Actions include pick-and-roll, isolation, post-up, transition, spot-up, cut, offensive rebound, and motion action.
-
-### Step 4 — Box score allocation
-
-Possession outcomes produce coherent individual statistics. Roles and tendencies determine who shoots, assists, rebounds, steals, and blocks.
-
-### Step 5 — Narrative events
-
-The simulator emits tags:
-
-- triple-double
-- 40-point game
-- 20-rebound game
-- 10-block game
-- buzzer-beater
-- upset
-- rivalry win
-- record pace
-- rookie breakout
-- revenge game
-- return from injury
-- first game against former team
-
-These feed The Global Five.
-
----
-
-## 8. Team Construction
-
-### Team ratings
-
-- Star power
-- Starting five
-- Bench depth
-- Creation
-- Shooting
-- Rim pressure
-- Perimeter defense
-- Interior defense
-- Rebounding
-- Positional balance
-- Chemistry
-- Coaching
-- Experience
-- Health
-
-### Role conflicts
-
-Five strong players should not always form a great team.
-
-Penalties occur for:
-
-- Multiple high ball-dominance creators
-- No primary creator
-- Poor spacing
-- No rim protection
-- Small rebounding lineup
-- Weak bench creation
-- Too many development players in win-now roles
-- Star hierarchy conflict
-
-Bonuses occur for:
-
-- Clear primary and secondary creator
-- Complementary shooting
-- Two-way lineup balance
-- Bench scorer
-- Defensive anchor
-- Veteran leadership
-- Coach-system fit
-
----
-
-## 9. NCAA and Prospect Pipeline
-
-### NCAA scope
-
-- 200 selected Division I programs.
-- Abstracted conference schedules and a national tournament layer.
-- Exactly five named players per program: one at each position.
-- No named bench players in the initial version.
-- NCAA eligibility is limited to ages 18–22.
-- Players may declare early, return, transfer, graduate, or go undrafted.
-
-### Prospect sources
-
-- NCAA
-- G League development pathway
-- European domestic teams
-- European youth academies
-- Africa academies
-- Australia
-- Asia
-- South America
-- Limited high-school elite prospects
-
-### Prospect evaluation
-
-- Current ability
-- Potential
-- Age
-- Physical profile
-- Role
-- Production
-- League strength
-- Tournament performance
-- Work ethic
-- Injury history
-- Scout uncertainty
-
-Mock drafts must include uncertainty. Teams can draft for upside, fit, readiness, marketability, or positional need.
-
----
-
-## 10. NBA Draft
-
-### Draft lifecycle
-
-1. Prospect generation and development
-2. Draft declaration
-3. Combine / scouting update
-4. Lottery
-5. Mock drafts
-6. Draft night
-7. Rookie contracts
-8. Summer movement and roster decisions
-
-### Draft team AI
-
-Each NBA team has a draft strategy:
-
-- Best player available
-- High-upside
-- Ready now
-- Positional need
-- Defense first
-- Shooting first
-- International stash
-- Market star
-
-### Draft history pages
-
-- Full draft by year
-- Redrafts based on career value
-- Busts
-- Steals
-- Best classes
-- Most productive pick numbers
-- Teams with best/worst draft records
-
----
-
-## 11. Transactions
-
-### NBA movement
-
-- Trades
-- Free agency
-- Extensions
-- Waivers
-- G League assignments
-- Draft rights
-- Simplified salary cap and luxury tax
-
-### International movement
-
-- Transfers
-- Contract expiration
-- Buyouts
-- Loans only if needed later
-- NBA escape clauses
-- Return-to-Europe clauses
-
-### Transaction AI
-
-A player evaluates:
-
-- Salary
-- minutes/role
-- title chance
-- development
-- league prestige
-- home-country preference
-- coach relationship
-- loyalty
-- market size
-- NBA ambition
-
-A team evaluates:
-
-- talent
-- fit
-- age curve
-- contract value
-- roster need
-- marketability
-- chemistry
-- competitive window
-
----
-
-## 12. Competition Pages
-
-Every competition page has:
-
-- Overview
-- Schedule/results
-- Standings/bracket
-- Teams
-- Players
-- Statistics
-- Awards
-- History
-- Records
-
-NBA adds:
-
-- Conferences
-- Play-in
-- Draft links
-- Salary/transaction context
-
-NCAA adds:
-
-- Conferences
-- AP-style ranking
-- Tournament bracket
-- Prospects
-- Draft declarations
-
-EuroLeague adds:
-
-- Domestic club context
-- Final Four
-- cross-league transfer links
-
----
-
-## 13. Player Page
-
-Header:
-
-- Name, nationality, age
-- Team and league
-- Position, height, weight, body type
-- Primary/secondary role
-- Rarity, base talent, current ability, potential
-- Contract and draft information
-
-Tabs:
-
-- Overview
-- Attributes
-- Statistics
-- Game log
-- Career history
-- Awards
-- Transactions
-- International career
-- Historical standing
-
-Career history rows must be clickable and show exact competition, team, games, statistics, awards, playoff result, and titles. No generic “won 3 stages/races” equivalent.
-
----
-
-## 14. Team Page
-
-Header:
-
-- Team identity
-- League
-- Current record
-- Power ranking
-- Coach
-- Payroll tier
-- Contention status
-
-Tabs:
-
-- Overview
-- Roster
-- Rotation
-- Results
-- Statistics
-- Transactions
-- Draft assets
-- History
-- Records
-
-Historical season rows:
-
-- League record
-- Playoff result
-- Domestic/continental titles
-- Coach
-- Core players
-- Major transactions
-- Team identity
-
----
-
-## 15. The Global Five
-
-Weekly sections:
-
-1. Five biggest stories
-2. Results of the week
-3. Players of the week
-4. Power rankings
-5. MVP races
-6. Draft stock movement
-7. Trade and transfer rumors
-8. International watch
-9. Historical milestone
-10. Games to watch
-
-Narratives should reference context rather than merely reporting numbers.
-
-Examples:
-
-- “At 20, Luka Petrovic has become the youngest EuroLeague player to average 20 points through December.”
-- “Detroit has won 14 of 16 and is tracking toward its best season in 27 years.”
-- “Former No. 1 pick Malik Benson is rebuilding his career in Valencia after falling out of the NBA rotation.”
-
----
-
-## 16. Hall of Fame and Historical Scores
-
-Store separate scores rather than one universal number.
-
-- Global greatness
-- NBA legacy
-- European legacy
-- International legacy
-- Peak
-- Longevity
-- Playoff value
-- Scoring
-- Playmaking
-- Defense
-- Rebounding
-
-This permits meaningful comparison without forcing every career into an NBA-only model.
-
----
-
-## 17. Technical Architecture
-
-Recommended stack:
-
-- React + TypeScript + Vite
-- Zustand or useReducer for state initially
-- Deterministic seeded RNG
-- IndexedDB for local saves
-- Compression before persistence
-- Neon/Postgres cloud saves in a later milestone
-
-### Suggested folders
-
-```text
-src/
-  app/
-  components/
-  data/
-  engine/
-    calendar/
-    games/
-    leagues/
-    careers/
-    draft/
-    transactions/
-    awards/
-    history/
-  features/
-    world/
-    results/
-    tournaments/
-    teams/
-    players/
-    draft/
-    statistics/
-    magazine/
-    almanac/
-  models/
-  state/
-  utils/
-```
-
-### Engine separation
-
-The simulation engine must not depend on React. UI sends commands to the engine and renders resulting state/events.
-
-```ts
-advanceWeek(state): SimulationResult
-simulateGame(game, context): GameResult
-runDraft(state): DraftResult
-processTransactions(state): TransactionResult
-closeSeason(state): YearReviewState
-openNextSeason(state): GameState
-```
-
----
-
-## 18. MVP Build Sequence
-
-### Milestone 1 — Interactive shell
-
-- Vite + React application shell
-- World/Results/Tournaments/Teams/Players/Market/Statistics navigation
-- Real-name NBA, selected NCAA and EuroLeague team data
-- Player and team detail modals
-- GitHub Pages deployment workflow
-
-### Milestone 2 — Core NBA season
-
-- Schedule
-- standings
-- possession-based statistical simulation
-- playoffs
-- awards
-- year-end stop
-
-### Milestone 3 — NCAA and draft
-
-- 200-program starting-five NCAA model
-- prospects and conference metadata
-- national tournament
-- lottery and 60-pick draft
-- position-specific rookie replacement generation
-
-### Milestone 4 — Transactions
-
-- contracts
-- trades
-- free agency
-- simplified cap
-- team-building AI
-
-### Milestone 5 — Europe
-
-- EuroLeague
-- six domestic leagues
-- cross-competition clubs
-- transfers and NBA movement
-
-### Milestone 6 — Narrative/history
-
-- The Global Five
-- Almanac
-- Hall of Fame
-- records
-- draft-class history
-
-### Milestone 7 — International basketball
-
-- national teams
-- qualification
-- World Cup
-- continental championships
-- Olympics
+Unsigned drafted players can:
 
+- Remain at an international club
+- Enter the G League
+- Sign in Europe or another professional league
+- Join the NBA later when their rights are activated
+- Leave basketball, causing the rights to expire
+
+## 14. Undrafted NCAA exits
+
+Professional placement probability depends on current ability.
+
+- Elite undrafted player: strong chance of a professional contract
+- Good player: possible G League or international contract
+- Marginal player: low probability of remaining in the simulated universe
+- Weak player: normally leaves active basketball
+
+This prevents every international team from becoming full of former college players.
+
+## 15. International career movement
+
+### NBA to international basketball
+
+A player can move abroad when:
+
+- He has spent multiple seasons in the NBA
+- His ability/minutes are not enough for a meaningful NBA role
+- A foreign team can offer a larger role
+
+### International basketball to NBA
+
+An overseas player can receive an NBA opportunity when:
+
+- He becomes one of the strongest non-NBA players
+- He is in a plausible age range
+- An NBA roster has a vacancy or weak player
+- His rights holder activates retained draft rights, or he signs as a free agent
+
+## 16. Promotion and relegation
+
+Selected countries use annual promotion and relegation.
+
+Process:
+
+1. Find the lowest eligible top-tier team.
+2. Find the strongest second-tier team.
+3. Swap their competition and tier values.
+4. Update every active player’s competition data.
+5. Record the movement in the permanent promotion history.
+
+EuroLeague teams are currently protected from automatic domestic relegation.
+
+## 17. Annual finalization
+
+At the end of week 40:
+
+1. Finalize every competition.
+2. Select champions and runners-up.
+3. Select MVPs and finals MVPs.
+4. Store statistical leaders.
+5. Store complete competition player-stat snapshots.
+6. Add player honors.
+7. Add team honors.
+8. Add coach honors.
+9. Add one annual row to every player history.
+10. Add one annual row to every team history.
+11. Stop at year review.
+
+The new year does not begin automatically.
+
+## 18. Year rollover
+
+After the user advances:
+
+1. Age professional players.
+2. Retire players whose career curves end.
+3. Identify the NCAA exit class.
+4. Run the 60-pick NBA Draft.
+5. Sign a selective number of picks.
+6. Retain rights for unsigned picks.
+7. Place or archive undrafted graduates.
+8. Age remaining college players.
+9. Run NBA/international movement.
+10. Run promotion and relegation.
+11. Enforce local quotas.
+12. Fill NCAA positional vacancies with age-18 freshmen.
+13. Fill professional rosters to 10.
+14. Recalculate team ratings.
+15. Reset season records.
+16. Begin the next year.
+
+## 19. Balance controls
+
+### Dynasty control
+
+Recent champions receive a small title-fatigue penalty during title selection. This does not prevent dynasties, but it prevents one strong roster from winning automatically every year.
+
+### MVP control
+
+Recent MVP winners receive a repeat penalty. Truly dominant players can still repeat, but awards should circulate among several plausible stars over a decade.
+
+### Strength hierarchy validation
+
+The automated test requires:
+
+- NBA average substantially above EuroLeague average
+- At least 18 NBA teams in the opening global top 20
+- No NCAA team stronger than the weakest NBA team
+- At least one top European team stronger than the weakest NBA team
+
+### Long-run integrity validation
+
+The 10-season test checks:
+
+- Exactly 200 NCAA teams
+- Exactly five players and one of each position per NCAA team
+- Exactly 10 players per professional team
+- No over-age NCAA players
+- Local-player quotas
+- Roughly 250 college exits
+- Exactly 60 draft picks
+- Selective immediate NBA signings
+- Complete player/team/competition histories
+- Multiple champions and MVP winners
+
+## 20. Current boundary and next systems
+
+v0.4 establishes the Chronicle architecture and long-run universe logic. The next highest-value systems are:
+
+- Actual scheduled matchups and individual box scores
+- Play-in and playoff brackets
+- EuroLeague Final Four presentation
+- NCAA bracket presentation
+- Contracts and simplified salary cap
+- Trade value and roster-needs AI
+- Injuries and availability
+- All-league teams and defensive awards
+- Hall of Fame scoring and category pages
+- Save slots and cloud synchronization
+- National teams and international tournaments

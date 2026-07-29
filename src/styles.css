@@ -160,3 +160,56 @@ tr.clickable:hover { background: #f4ecdf; }
   .section-header, .page-heading { align-items: flex-start; flex-direction: column; }
   .section-header > span, .page-note { text-align: left; }
 }
+
+/* Chronicle detail pages and global simulation bar */
+.global-simulation { max-width: 1460px; margin: 0 auto; padding: 11px 18px; background: #e3dacb; border-bottom: 1px solid #c8bba5; }
+.simulation-label { display: flex; flex-direction: column; min-width: 190px; margin-right: 6px; }
+.simulation-label strong { font-size: .82rem; }
+.simulation-label span { color: var(--muted); font-size: .67rem; }
+.rank-button { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.rank-button:hover { background: #f4ecdf; }
+.inline-link { border: 0; padding: 0; background: transparent; color: var(--accent-dark); font-weight: 800; cursor: pointer; text-align: left; }
+.inline-link:hover { text-decoration: underline; }
+.competition-button { width: 100%; text-align: left; cursor: pointer; }
+.competition-button:hover { transform: translateY(-2px); border-color: #aa9270; }
+.competition-card-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; color: var(--muted); font-size: .72rem; }
+.filters.six { grid-template-columns: repeat(6, minmax(120px, 1fr)); }
+.detail-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; padding: 17px; background: var(--paper); border: 1px solid var(--line); border-top: 5px solid var(--accent); border-radius: 9px; box-shadow: 0 2px 8px rgb(40 35 25 / .07); }
+.back-button { align-self: flex-start; border: 0; background: transparent; color: var(--accent); padding: 0; font-weight: 900; cursor: pointer; }
+.detail-title { margin: 0; }
+.detail-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+.detail-tabs { margin: 4px 0 14px; }
+.detail-columns { align-items: start; }
+.ranking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.leader-card { width: 100%; display: flex; flex-direction: column; text-align: left; padding: 13px 3px; border: 0; border-bottom: 1px solid #e2d8c7; background: transparent; cursor: pointer; }
+.leader-card:hover { background: #f4ecdf; }
+.leader-card > span { color: var(--accent); font-size: .68rem; font-weight: 900; text-transform: uppercase; }
+.leader-card > strong { margin: 3px 0; font-family: Georgia, serif; font-size: 1.1rem; }
+.honors-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.honor-card { position: relative; display: flex; flex-direction: column; min-height: 105px; padding: 14px; background: #f2e8d7; border: 1px solid #d7c5a9; border-left: 5px solid #b18743; border-radius: 7px; }
+.honor-card strong { font-family: Georgia, serif; font-size: 1.06rem; }
+.honor-card span { color: var(--muted); margin-top: 4px; font-size: .76rem; }
+.honor-card b { margin-top: auto; color: #8a5c21; font-size: .8rem; }
+.timeline-event { display: grid; grid-template-columns: 58px 1fr; gap: 14px; padding: 12px 3px; border-bottom: 1px solid #e2d8c7; }
+.timeline-event > span { color: var(--accent); font-weight: 900; }
+.timeline-event p { margin: 3px 0 0; color: var(--muted); font-size: .8rem; }
+.feature-copy { border-bottom: 1px solid #e2d8c7; padding: 12px 0; }
+.feature-copy p { margin: 4px 0; color: var(--muted); }
+.almanac-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.empty-state.small { padding: 18px 10px; }
+.compact-table { min-width: 660px; }
+
+@media (max-width: 1120px) {
+  .filters.six { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+  .ranking-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .detail-metrics, .almanac-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .honors-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .global-simulation { padding: 9px 11px; }
+  .simulation-label { width: 100%; }
+  .detail-metrics, .almanac-metrics, .honors-grid { grid-template-columns: 1fr; }
+  .filters.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

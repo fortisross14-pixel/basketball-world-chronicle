@@ -121,3 +121,78 @@ export const G_LEAGUE_TEAMS = [
   ['Motor City Cruise','#C8102E'], ['Ontario Clippers','#C8102E'], ['Osceola Magic','#0077C0'],
   ['Rio Grande Valley Vipers','#CE1141'], ['Santa Cruz Warriors','#1D428A'],
 ].map(([name, color]) => ({ name, color, country: 'USA', league: 'NBA G League' }));
+
+// Additional clubs used by the expanded Chronicle universe. The data intentionally
+// focuses on recognizable clubs and enough depth to support domestic cups,
+// promotion/relegation and believable international player movement.
+export const EXTENDED_PRO_TEAMS = [
+  // Spain
+  ['UCAM Murcia','Spain','Liga ACB','#C8102E',1], ['Lenovo Tenerife','Spain','Liga ACB','#F7C600',1],
+  ['Basket Zaragoza','Spain','Liga ACB','#D71920',1], ['Bilbao Basket','Spain','Liga ACB','#111111',1],
+  // Greece
+  ['AEK Athens','Greece','Greek League','#F7C600',1], ['Promitheas Patras','Greece','Greek League','#E2001A',1],
+  ['Peristeri','Greece','Greek League','#1D428A',1], ['Maroussi','Greece','Greek A2','#F7C600',2],
+  // Turkey
+  ['Bahçeşehir Koleji','Turkey','Turkish BSL','#C8102E',1], ['Karşıyaka','Turkey','Turkish BSL','#007A33',1],
+  ['Bursaspor','Turkey','Turkish BSL','#007A33',1], ['Darüşşafaka','Turkey','Turkish TBL','#007A33',2],
+  // Italy
+  ['Dinamo Sassari','Italy','Lega Basket Serie A','#1D428A',1], ['Pallacanestro Varese','Italy','Lega Basket Serie A','#C8102E',1],
+  ['Aquila Trento','Italy','Lega Basket Serie A','#111111',1], ['Pallacanestro Cantù','Italy','Serie A2','#1D428A',2],
+  // France
+  ['Nanterre 92','France','LNB Pro A','#007A33',1], ['Strasbourg IG','France','LNB Pro A','#C8102E',1],
+  ['Le Mans Sarthe','France','LNB Pro A','#F58220',1], ['Élan Béarnais','France','Pro B','#007A33',2],
+  // Germany
+  ['MHP Riesen Ludwigsburg','Germany','Basketball Bundesliga','#F7C600',1], ['Würzburg Baskets','Germany','Basketball Bundesliga','#C8102E',1],
+  ['Brose Bamberg','Germany','Basketball Bundesliga','#C8102E',1], ['Science City Jena','Germany','ProA Germany','#1D428A',2],
+  // Serbia and Adriatic
+  ['FMP Belgrade','Serbia','Adriatic League','#C8102E',1], ['Spartak Subotica','Serbia','Adriatic League','#1D428A',1],
+  ['KK Vojvodina','Serbia','KLS Serbia','#C8102E',2], ['Zlatibor','Serbia','KLS Serbia','#F7C600',2],
+  // Lithuania
+  ['Rytas Vilnius','Lithuania','Lithuanian LKL','#C8102E',1], ['Wolves Vilnius','Lithuania','Lithuanian LKL','#111111',1],
+  ['Lietkabelis','Lithuania','Lithuanian LKL','#7A263A',1], ['Neptūnas Klaipėda','Lithuania','Lithuanian LKL','#1D428A',1],
+  ['Sūduva-Mantinga','Lithuania','NKL Lithuania','#C8102E',2], ['Telšiai','Lithuania','NKL Lithuania','#1D428A',2],
+  // Israel
+  ['Hapoel Jerusalem','Israel','Israeli Premier League','#C8102E',1], ['Hapoel Holon','Israel','Israeli Premier League','#6A1B9A',1],
+  ['Bnei Herzliya','Israel','Israeli Premier League','#1D428A',1], ['Elitzur Netanya','Israel','Israeli National League','#F7C600',2],
+  // Russia
+  ['CSKA Moscow','Russia','VTB United League','#C8102E',1], ['Zenit Saint Petersburg','Russia','VTB United League','#1D428A',1],
+  ['UNICS Kazan','Russia','VTB United League','#007A33',1], ['Lokomotiv Kuban','Russia','VTB United League','#C8102E',1],
+  ['Parma Perm','Russia','VTB United League','#1D428A',1], ['Uralmash','Russia','VTB United League','#F58220',1],
+  ['Dynamo Vladivostok','Russia','Russian Superleague','#1D428A',2], ['Temp-SUMZ','Russia','Russian Superleague','#C8102E',2],
+  // Argentina
+  ['Quimsa','Argentina','Liga Nacional','#003DA5',1], ['Peñarol Mar del Plata','Argentina','Liga Nacional','#1D428A',1],
+  ['San Lorenzo','Argentina','Liga Nacional','#C8102E',1], ['Obras Sanitarias','Argentina','Liga Nacional','#F7C600',1],
+  // Brazil
+  ['Minas Tênis Clube','Brazil','NBB Brazil','#1D428A',1], ['Bauru Basket','Brazil','NBB Brazil','#C8102E',1],
+  ['São Paulo FC','Brazil','NBB Brazil','#C8102E',1], ['Corinthians','Brazil','NBB Brazil','#111111',1],
+  // Australia
+  ['Adelaide 36ers','Australia','NBL Australia','#C8102E',1], ['Brisbane Bullets','Australia','NBL Australia','#1D428A',1],
+  ['Cairns Taipans','Australia','NBL Australia','#F58220',1], ['New Zealand Breakers','New Zealand','NBL Australia','#111111',1],
+  // Canada
+  ['Scarborough Shooting Stars','Canada','CEBL Canada','#1D428A',1], ['Niagara River Lions','Canada','CEBL Canada','#F58220',1],
+  ['Vancouver Bandits','Canada','CEBL Canada','#007A33',1], ['Calgary Surge','Canada','CEBL Canada','#C8102E',1],
+  ['Ottawa BlackJacks','Canada','CEBL Canada','#111111',1], ['Winnipeg Sea Bears','Canada','CEBL Canada','#1D428A',1],
+  // China
+  ['Zhejiang Golden Bulls','China','CBA','#C8102E',1], ['Xinjiang Flying Tigers','China','CBA','#1D428A',1],
+  ['Shenzhen Leopards','China','CBA','#C8102E',1], ['Shandong Heroes','China','CBA','#F58220',1],
+  // Japan / high-level countries
+  ['Osaka Evessa','Japan','B.League','#C8102E',1], ['Nagoya Diamond Dolphins','Japan','B.League','#C8102E',1],
+  ['Seoul SK Knights','South Korea','Korean KBL','#C8102E',1], ['Busan KCC Egis','South Korea','Korean KBL','#1D428A',1],
+  ['Anyang Jung Kwan Jang','South Korea','Korean KBL','#C8102E',1], ['Changwon LG Sakers','South Korea','Korean KBL','#7A263A',1],
+  ['San Miguel Beermen','Philippines','Philippine PBA','#C8102E',1], ['Barangay Ginebra','Philippines','Philippine PBA','#C8102E',1],
+  ['TNT Tropang Giga','Philippines','Philippine PBA','#1D428A',1], ['Meralco Bolts','Philippines','Philippine PBA','#F58220',1],
+  // Other Europe, high-level simulation
+  ['Cibona Zagreb','Croatia','Croatian League','#1D428A',1], ['Split','Croatia','Croatian League','#F7C600',1],
+  ['Krka Novo Mesto','Slovenia','Slovenian League','#007A33',1], ['Helios Suns','Slovenia','Slovenian League','#F7C600',1],
+  ['Śląsk Wrocław','Poland','Polish League','#007A33',1], ['Anwil Włocławek','Poland','Polish League','#1D428A',1],
+  ['Oostende','Belgium','Belgian-Dutch League','#F7C600',1], ['Leiden','Netherlands','Belgian-Dutch League','#1D428A',1],
+  // Africa
+  ['Petro de Luanda','Angola','African Basketball League','#F7C600',1], ['US Monastir','Tunisia','African Basketball League','#1D428A',1],
+  ['Al Ahly','Egypt','African Basketball League','#C8102E',1], ['Rivers Hoopers','Nigeria','African Basketball League','#007A33',1],
+].map(([name, country, league, color, tier]) => ({ name, country, league, color, tier }));
+
+export const EUROCUP_CLUBS = new Set([
+  'Joventut Badalona','Unicaja Málaga','Gran Canaria','Beşiktaş','Galatasaray','Türk Telekom',
+  'Reyer Venezia','Pallacanestro Brescia','ASVEL','JL Bourg','Ratiopharm Ulm','Telekom Baskets Bonn',
+  'Cedevita Olimpija','Buducnost','Rytas Vilnius','Hapoel Jerusalem',
+]);
