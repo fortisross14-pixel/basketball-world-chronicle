@@ -129,11 +129,6 @@ tr.clickable:hover { background: #f4ecdf; }
 .player-number { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: var(--dark); color: white; font-family: Georgia, serif; font-weight: 900; font-size: 1.15rem; }
 .modal-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; }
 .modal-columns { margin: 14px 0; }
-.career-curve { display: flex; align-items: flex-end; gap: 4px; min-height: 105px; padding: 8px; background: #f5ecdc; border-radius: 8px; overflow-x: auto; }
-.career-curve > div { min-width: 24px; flex: 1; height: 88px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
-.career-curve span { display: block; width: 100%; max-width: 34px; min-height: 6px; background: var(--blue); border-radius: 3px 3px 0 0; }
-.career-curve .current-year span { background: var(--accent); box-shadow: 0 0 0 2px rgb(164 58 47 / .2); }
-.career-curve small { font-size: .58rem; }
 .attribute-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 15px; }
 .attribute { background: #eee5d5; padding: 9px; border-radius: 6px; }
 .attribute span { display: block; color: var(--muted); font-size: .69rem; }
@@ -269,3 +264,58 @@ tr.clickable:hover { background: #f4ecdf; }
   .honor-year { grid-template-columns: 1fr; gap: 4px; }
   .honor-row { grid-template-columns: 58px minmax(0, 1fr); }
 }
+
+/* v0.7 save manager, flags and football-style career history */
+.flag { display: inline-block; margin-right: .22em; font-size: 1.05em; line-height: 1; vertical-align: -0.06em; white-space: nowrap; }
+.masthead-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
+.header-button { min-height: 39px; padding: 8px 13px; border: 1px solid rgb(255 255 255 / .22); border-radius: 7px; background: rgb(255 255 255 / .08); color: white; font-weight: 800; cursor: pointer; }
+.header-button:hover { background: rgb(255 255 255 / .16); }
+.save-status { min-width: 86px; color: #d7e5dc; font-size: .67rem; text-align: right; }
+.save-status.error { color: #ffc4bd; }
+.button.danger { border-color: #c9968e; color: #8c2f25; background: #fff7f5; }
+.button.danger:hover { background: #f5dfdc; }
+.loading-screen, .save-home { min-height: 100vh; padding: 54px max(24px, calc((100vw - 1260px) / 2)); background: radial-gradient(circle at top left, #fffdf7 0, #f3ecdf 54%, #e3d8c7 100%); }
+.loading-screen { display: flex; flex-direction: column; justify-content: center; }
+.loading-screen h1, .save-home h1 { margin: 6px 0 12px; font-family: Georgia, serif; color: var(--dark); font-size: clamp(2rem, 5vw, 4.2rem); }
+.loading-screen p, .save-home header p { max-width: 720px; color: var(--muted); line-height: 1.6; }
+.save-home header { padding-bottom: 28px; border-bottom: 1px solid #cdbfa9; }
+.save-slot-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 28px; }
+.save-slot { min-height: 290px; display: flex; flex-direction: column; padding: 23px; border: 1px solid #cdbfa9; border-top: 6px solid var(--accent); border-radius: 12px; background: rgb(255 253 247 / .93); box-shadow: 0 10px 30px rgb(47 37 24 / .09); }
+.save-slot.empty { border-top-color: #9b9284; background: rgb(250 247 240 / .78); }
+.slot-number { color: var(--accent); font-size: .72rem; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.save-slot h2 { margin: 17px 0 6px; font-family: Georgia, serif; color: var(--dark); font-size: 1.55rem; }
+.slot-season { margin-top: 8px; font-size: 1.7rem; font-weight: 900; color: var(--dark); }
+.save-slot p { color: var(--muted); }
+.save-slot small { color: var(--muted); }
+.slot-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 22px; }
+.home-status { margin-top: 18px; color: var(--muted); font-size: .8rem; }
+.career-year-scroll { width: 100%; overflow-x: auto; padding: 3px 0 10px; scrollbar-gutter: stable; }
+.career-year-strip { min-width: max-content; display: flex; gap: 7px; }
+.career-year-card { width: 58px; min-height: 78px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 5px; border: 1px solid #d7dfe5; border-radius: 9px; background: #f5f7f8; color: #68727d; }
+.career-year-card small { font-size: .61rem; font-weight: 900; letter-spacing: .04em; }
+.career-year-card strong { margin-top: 4px; font-size: .92rem; }
+.career-year-card span { margin-top: 3px; color: #82a4d7; font-size: .69rem; font-weight: 900; }
+.career-year-card.current-year { border-color: #2f70d8; background: #3978da; color: white; box-shadow: 0 4px 12px rgb(47 112 216 / .22); }
+.career-year-card.current-year span { color: white; }
+.honors-timeline { display: flex; flex-direction: column; }
+.honor-year { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-bottom: 1px solid #e1d5c3; }
+.honor-year > h3 { margin: 2px 0; color: var(--accent-dark); font-size: 1.05rem; }
+.honor-year-content { display: flex; flex-direction: column; gap: 4px; }
+.honor-row { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 7px; align-items: start; margin: 0; }
+.honor-row > strong { padding-top: 3px; color: var(--muted); font-size: .63rem; text-transform: uppercase; }
+.honor-row > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.honor-chip { min-height: 22px; padding: 3px 7px; border: 1px solid #d4c09c; border-radius: 12px; background: #efe4d0; color: #493b2a; font-size: .65rem; font-weight: 750; }
+
+@media (max-width: 900px) {
+  .save-slot-grid { grid-template-columns: 1fr; }
+  .save-slot { min-height: 240px; }
+  .masthead-actions { justify-content: flex-start; }
+}
+@media (max-width: 560px) {
+  .save-home, .loading-screen { padding: 32px 15px; }
+  .honor-year { grid-template-columns: 1fr; gap: 2px; }
+  .honor-row { grid-template-columns: 52px minmax(0, 1fr); }
+  .save-status { width: 100%; text-align: left; }
+}
+.error-screen pre { max-width: 900px; overflow: auto; padding: 13px; border: 1px solid #d9b4ae; border-radius: 7px; background: #fff8f6; color: #7c2d24; white-space: pre-wrap; }
+.error-screen .button { align-self: flex-start; margin-top: 8px; }

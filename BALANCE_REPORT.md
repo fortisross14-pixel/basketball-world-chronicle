@@ -1,4 +1,4 @@
-# Basketball World Chronicle v0.6.1 — Deterministic Balance Report
+# Basketball World Chronicle v0.7.0 — Deterministic Balance Report
 
 ## Test configuration
 

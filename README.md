@@ -1,4 +1,4 @@
-# Basketball World Chronicle — Vite + React v0.6.1
+# Basketball World Chronicle — Vite + React v0.7.0
 
 A global, history-first basketball simulator built around the same Chronicle principle as Football World Chronicle and Peloton Chronicle: advance the universe, then open any competition, team, player, coach, draft class or market record and understand the history that was created.
 
@@ -41,7 +41,39 @@ The project includes `.github/workflows/deploy.yml`.
 
 `vite.config.js` uses `base: './'`, so the application works from a repository subpath.
 
-## v0.6.1 headline systems
+
+## v0.7.0 save and presentation fixes
+
+### Three persistent save slots
+
+The application now opens on a home screen with three independent universe slots. Each slot supports:
+
+- Continue
+- Replace with a new universe
+- Permanent deletion with confirmation
+- Stored year, week, phase and last-save timestamp
+
+The in-game masthead includes **Home** and **Save** controls. Every simulation and offseason action is also autosaved before the next screen can fail. Writes are serialized so rapid simulation clicks cannot save an older universe over a newer one.
+
+Saves use browser **IndexedDB**, not localStorage. An opening universe is already several megabytes and grows as annual histories, brackets, contracts and retired careers accumulate, so localStorage is not a safe foundation. Save metadata is stored separately from the full universe to keep the three-slot home screen fast.
+
+### Crash recovery
+
+The numeric-year sorting crash caused by calling `localeCompare` on honor years has been removed. All mixed string/number sorting now normalizes values safely. A React error boundary provides a reload screen instead of a blank page, and the active slot can be continued after reload.
+
+### Player presentation
+
+- Career development now uses compact annual cards rather than decorative bars.
+- The current career year is highlighted.
+- Each card shows the multiplier and the resulting ability implied by the permanent base.
+- NCAA-origin careers show only the college years actually used before the professional curve.
+- Honors are grouped by year and split into compact **Titles** and **Awards** rows.
+
+### Flags
+
+Country or regional flags now appear throughout player tables and profiles, team cards and pages, competition cards and pages, tournament navigation, standings and global rankings.
+
+## v0.7.0 headline systems
 
 ### Permanent player identity
 
@@ -258,7 +290,7 @@ Each draft contains:
 
 ## Validation
 
-`npm run validate` executes three deterministic seeds for ten seasons each and checks:
+`npm run validate` executes two deterministic seeds for five seasons each. `npm run validate:full` executes three seeds for ten seasons each. Both check:
 
 - 200 NCAA starting fives and 10-player professional rosters
 - NCAA multipliers never exceeding 0.89

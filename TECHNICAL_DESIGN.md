@@ -1,4 +1,4 @@
-# Basketball World Chronicle — Technical Design v0.6.1
+# Basketball World Chronicle — Technical Design v0.7.0
 
 ## 1. Product objective
 
@@ -20,12 +20,13 @@ The core loop is:
 - React UI
 - Pure deterministic JavaScript simulation engine
 - Static GitHub Pages deployment
-- No server dependency in v0.6
+- No server dependency in v0.7
 
 ```text
 src/App.jsx                    navigation and Chronicle pages
 src/styles.css                 responsive visual system
 src/game/universe.js           generation, season, market and history engine
+src/game/saveDb.js             three-slot IndexedDB persistence
 src/data/teamData.js           team identities and color palettes
 src/data/competitionData.js    tournament hierarchy and cadence
 scripts/validate.mjs           deterministic long-run validation
@@ -33,6 +34,30 @@ BALANCE_REPORT.md              measured balance output
 ```
 
 Simulation controls are global and appear above navigation. They are not part of the menu.
+
+
+## 2.1 Persistence architecture
+
+The browser client exposes three save slots. Persistence uses IndexedDB because the initial universe is approximately 4.5 MB before long-term history accumulation. localStorage is intentionally not used.
+
+Two object stores are maintained:
+
+```text
+save-metadata   slot, name, year, week, phase, updatedAt
+save-slots      slot, complete structured-clone universe
+```
+
+The home screen reads only metadata. Full universe data is loaded only when the user continues a slot. Simulation and offseason writes are queued in order, preventing a slower earlier save from overwriting a newer state.
+
+The application saves after:
+
+- New-universe creation
+- Every simulation action
+- Every offseason transition
+- Manual Save
+- Returning Home
+
+A React error boundary converts render failures into a reload path rather than an unrecoverable blank screen.
 
 ## 3. Navigation
 
