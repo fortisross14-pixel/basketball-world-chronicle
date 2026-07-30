@@ -1,6 +1,6 @@
-# Basketball World Chronicle — Vite + React v0.4
+# Basketball World Chronicle — Vite + React v0.6.1
 
-A history-first global basketball simulator designed around the same core pleasure as Football World Chronicle and Peloton Chronicle: simulate seasons, follow careers, open any person/team/competition, and navigate the permanent history that the universe creates.
+A global, history-first basketball simulator built around the same Chronicle principle as Football World Chronicle and Peloton Chronicle: advance the universe, then open any competition, team, player, coach, draft class or market record and understand the history that was created.
 
 ## Run locally
 
@@ -16,131 +16,266 @@ npm run build
 npm run preview
 ```
 
-Long-run engine test:
+Fast deterministic integrity test with visible season-by-season progress:
 
 ```bash
 npm run validate
 ```
 
+Full three-seed, ten-season balance suite:
+
+```bash
+npm run validate:full
+```
+
+The quick command is the normal development check. The full suite is intentionally heavier and may take several minutes in constrained environments.
+
 ## GitHub Pages
 
-The repository includes `.github/workflows/deploy.yml`.
+The project includes `.github/workflows/deploy.yml`.
 
-1. Push the project to `main`.
+1. Push the project to the `main` branch.
 2. Open **Settings → Pages** in GitHub.
-3. Select **GitHub Actions** as the source.
-4. The workflow builds the Vite project and publishes `dist`.
+3. Select **GitHub Actions** as the Pages source.
+4. Every push to `main` builds the Vite application and deploys `dist`.
 
-`vite.config.js` uses `base: './'`, so it works from a repository subpath.
+`vite.config.js` uses `base: './'`, so the application works from a repository subpath.
 
-## Current universe
+## v0.6.1 headline systems
 
-- 30 NBA teams with real names and primary color palettes.
-- 14 G League teams.
-- 200 selected NCAA Division I programs.
-- NCAA teams contain only five named starters: PG, SG, SF, PF and C.
-- Every professional team contains exactly 10 active players.
-- EuroLeague and EuroCup overlays on domestic clubs.
-- Detailed domestic ecosystems for Spain, Greece, Turkey, Italy, France, Germany, Serbia, Lithuania, Israel and Russia.
-- Detailed leagues/cups in Argentina, Brazil, Australia, Canada and China.
-- High-level leagues in Japan, South Korea, the Philippines, Croatia, Slovenia, Poland, Belgium/Netherlands and Africa.
-- Promotion and relegation in selected European countries.
+### Permanent player identity
 
-Opening population:
+A player's rarity and base level are assigned at birth and never change.
 
-- 402 teams.
-- 1,000 NCAA players.
-- 2,020 professional players.
-- 3,020 active players.
-- 402 locally weighted head coaches.
+```text
+Permanent
+- Rarity
+- Base level
+- Career length
+- Career profile
+- Position, body and role
 
-## Chronicle pages
+Annual
+- Development multiplier
+- Annual shape
+- Minutes and opportunity
+- Team and league
+- Production and honors
+```
 
-### Player page
+Every player now also stores `birthRarity` and `birthBase`. The deterministic validator fails if either permanent value changes.
 
-Every player keeps:
+### NCAA development cap
 
-- Permanent rarity, base level, career length and career profile.
-- Current ability, annual shape and complete career multiplier curve.
-- Physical position, height, body type and basketball role.
-- NBA Draft year, pick, origin and rights holder.
-- Detailed annual line: team, competition, games, minutes, points, rebounds, offensive/defensive rebounds, assists, steals, blocks and shooting splits.
-- Awards and statistical honors.
-- Career timeline containing draft selections, signings, releases, draft-and-stash moves, overseas transfers, NBA returns and retirement.
+NCAA prospects can hold elite long-term potential without playing like finished NBA superstars.
 
-This makes careers such as “failed NBA prospect → EuroLeague star → NBA return” permanently trackable.
+Typical college multipliers:
 
-### Team page
+```text
+Freshman   0.75–0.82
+Sophomore  0.79–0.87
+Junior     0.81–0.89
+Senior     0.88–0.89
+```
 
-Every team keeps:
+After leaving college, an NCAA-origin player moves onto a separate professional curve beginning around `0.90` and peaking no higher than `1.01` before annual shape.
 
-- Current 5/10-player roster.
-- Coach and style.
-- Current record, raw roster rating and league-adjusted world rating.
-- Local-player count and minimum quota.
-- Annual record/rating/coach breakdown.
-- Trophy cabinet.
-- Team transaction history.
+A Legend remains a Legend at every stage:
 
-### Competition page
+```text
+Legend · base 92
+Age 18 NCAA: 92 × 0.80
+Age 20 pro:  92 × 0.90
+Prime:       92 × 1.01
+Decline:     lower career multiplier
+```
 
-Tournaments are selected through **region → competition**. Each competition has:
+### NBA is a destination league
 
-- Current standings and current leaders.
-- Annual champions and finalists.
-- MVP and Finals/Playoff MVP.
-- Points, rebounds, assists, steals and blocks leaders.
-- Historical top-10 points, rebounds and assists rankings.
-- Teams with the most wins and titles.
-- Click-through navigation to every player and team.
+NBA rosters are generated only once when a new universe is created. After the opening season, NBA teams create **zero** players.
 
-## Talent hierarchy
+Every later NBA arrival must come through:
 
-Talent is no longer generated uniformly.
+- NBA Draft
+- Draft-rights activation
+- Free agency
+- Trade / transfer
+- International or G League recruitment
 
-- NBA teams receive the deepest concentration of Rare, Epic, Legend and Generational talent.
-- EuroLeague teams form the second elite population.
-- Strong domestic clubs sit below that level.
-- NCAA contains mostly Common and Uncommon players, a smaller group of real prospects and only occasional elite talents.
-- Team ratings include roster depth, coach value and league context.
+NBA roster filling now searches the existing market and development world instead of manufacturing emergency prospects.
 
-The intended result is:
+### Elite-talent birth split
 
-- Most of the world top 20 are NBA teams.
-- A few elite European clubs can be stronger than the weakest NBA teams.
-- An NCAA team cannot become the best team in the world because it happens to contain one exceptional prospect.
+Every annual class contains eight or ten new Epic-or-better prospects.
 
-## NCAA, Draft and career movement
+Exactly half are generated in NCAA and half in non-NBA club systems:
 
-The 1,000 NCAA players are divided into four 250-player age cohorts. Approximately 250 players leave college every year.
+```text
+NCAA               50%
+International clubs 50%
+NBA                  0%
+```
 
-- The NBA Draft always contains 60 picks.
-- NBA teams draft two players but only zero, one or two normally join immediately.
-- Unsigned picks remain visible as retained NBA rights.
-- Draft-and-stash players can develop in the G League, Europe or another professional league.
-- Undrafted graduates have ability-based chances of finding professional work.
-- Many lower-level graduates leave the active basketball universe.
-- Overseas stars can later join the NBA.
-- Marginal NBA players can move abroad and receive larger roles.
+The Market → Spawn page displays this split for every class. Elite NCAA assignments are weighted toward major programs without making every famous school permanently dominant. International prospects are weighted toward clubs with stronger prestige, coaching development and ownership support.
 
-## Local identity
+### Elite migration toward the NBA
 
-Professional clubs must keep at least five local players. NBA clubs use USA/Canada as their local pool. New club-academy players are 80% local by default, and most coaches are generated from the team’s country.
+International clubs can develop elite players, but they are not expected to retain mature global superstars indefinitely.
 
-This prevents European and international rosters from becoming collections of seven or eight former NCAA players after a few seasons.
+- Generational prospects have an overwhelming NBA preference.
+- Legends receive strong NBA migration pressure.
+- Epics move when their current level or potential warrants it.
+- A very small minority of Legend/Epic players can receive a European-lifer profile.
+- No Generational player receives the European-lifer exception.
+- Players at 89+ current ability are aggressively recruited by NBA teams.
+
+This supports careers such as:
+
+```text
+Real Madrid academy
+→ EuroLeague breakout
+→ NBA Draft
+→ NBA star
+
+or the rare exception:
+
+Partizan
+→ EuroLeague icon
+→ long European career
+```
+
+### Rebalanced world hierarchy
+
+The rating model now creates a decisive gap between NBA and EuroLeague while allowing top NCAA programs to look far better than the 200-program college average.
+
+Measured ten-season averages across the deterministic suite:
+
+```text
+NBA        approximately 89.5–90.0
+EuroLeague approximately 75.5
+NCAA       approximately 59.0
+```
+
+Top NCAA teams reached approximately 73–75, close enough to elite Europe to contain visibly special prospects while remaining clearly below the professional world. In the test suite, the strongest EuroLeague team remained below the weakest NBA team and no 89+ player remained sustainably outside the NBA.
+
+The World page now includes a **League Strength** ranking based on current teams, rosters, coaching and institutional context.
+
+## Chronicle detail pages
+
+- **Player pages:** current profile, NCAA/pro development curve, annual club career, national-team career, honors grouped by year, contracts, NBA Draft/rights and complete transaction timeline.
+- **Team pages:** roster, annual records, trophy cabinet, coach/owner history and transactions.
+- **Competition pages:** current standings and leaders, stored brackets, annual champions/finalists/awards, all-time rankings and participating teams.
+- Every relevant player, team and competition name is clickable.
+
+## Results and tournaments
+
+Results is an award-race dashboard rather than a generic list of scores.
+
+- Current MVP race
+- Top scorer
+- Top rebounder
+- Direct links to each competition
+- Official awards during year review
+
+Tournament navigation follows:
+
+```text
+Continent
+  → top continental / headline competitions
+  → country
+      → domestic league, cup, supercup and second tier
+```
+
+International competitions include:
+
+- Olympic Basketball Tournament
+- FIBA World Cup
+- EuroBasket
+- FIBA AmeriCup
+- FIBA Asia Cup
+- AfroBasket
+
+Every completed knockout competition stores the bracket and exact path to the title.
+
+## Market and offseason
+
+The offseason order is explicit:
+
+```text
+Player retirements
+→ contract expiry / extensions
+→ coaching changes
+→ ownership mandate changes
+→ NBA Draft
+→ NCAA graduation and draft-and-stash market
+→ annual youth generation
+→ transfers and NBA migration
+→ promotion / relegation
+→ free agency
+→ final roster registration
+```
+
+Market tabs include:
+
+- Transfers
+- Draft
+- NBA rights
+- Free agency
+- Retirements and exits
+- Spawn classes
+- Coaching market
+
+Players never silently disappear. Unsigned graduates and unsuccessful professionals are archived with a recorded reason.
+
+## Universe size
+
+- 30 NBA teams, 10 players each
+- 14 G League teams, 10 players each
+- 200 selected NCAA Division I programs, five named starters each
+- 158 European and international professional clubs, 10 players each
+- 22 national teams selecting existing players
+- 424 team entities
+- Approximately 3,020 active club/NCAA/free-agent players at creation
+
+NCAA remains deliberately abstracted to:
+
+```text
+PG · SG · SF · PF · C
+```
+
+## Draft pipeline
+
+The 1,000 NCAA players are distributed across four age cohorts, producing roughly 250 exits each year.
+
+Each draft contains:
+
+- 60 total selections
+- 46 NCAA selections
+- 14 international selections
+- Normally 0–2 immediate signings per NBA team
+- Retained NBA rights for unsigned picks
+- More than 170 undrafted graduates entering free agency or leaving active basketball
 
 ## Validation
 
-`npm run validate` advances the game through 10 full seasons and checks:
+`npm run validate` executes three deterministic seeds for ten seasons each and checks:
 
-- 200 NCAA teams remain at exactly five players with one at every position.
-- Every professional team remains at exactly 10 players.
-- No NCAA player remains past the intended college age.
-- Every professional team meets its local-player quota.
-- Approximately 250 college exits and exactly 60 draft picks occur annually.
-- Only a selective portion of draft picks joins the NBA immediately.
-- NBA/EuroLeague/NCAA strength remains credible.
-- Champions and MVPs rotate across multiple teams and players.
-- Player, team and competition histories remain complete.
+- 200 NCAA starting fives and 10-player professional rosters
+- NCAA multipliers never exceeding 0.89
+- Rarity and base level never changing
+- Exactly half of annual Epic+ births coming through NCAA
+- Zero post-creation NBA player generation
+- Contracts, local-player quotas and NCAA-alumni limits
+- Approximately 250 NCAA exits and exactly 60 draft picks
+- Selective immediate NBA signings
+- A decisive NBA/EuroLeague gap
+- Strong NCAA programs remaining meaningfully above the college average
+- Mature Generational players migrating out of non-NBA professional leagues
+- No 89+ player remaining sustainably outside the NBA
+- Champion and MVP diversity
+- Brackets, awards and international cadence
+- Coaching movement, ownership turnover, free agency and retirements
 
-The source was JSX/JavaScript syntax-checked with TypeScript. This execution environment cannot access the public npm registry, so the production `dist` bundle must be generated locally or by GitHub Actions.
+See `BALANCE_REPORT.md` for measured output.
+
+The engine validation and TypeScript JSX parse check passed. This execution environment's internal npm mirror does not contain React, so a local `dist` folder could not be produced here. GitHub Actions or a normal npm installation will build the project.

@@ -9,14 +9,27 @@ const cup = (name, region, country, detail = 'detailed') => ({
 const supercup = (name, region, country, detail = 'detailed') => ({
   id: slug(name), name, region, country, kind: 'supercup', level: 1, detail,
 });
+const international = (name, region, countries, startYear, frequency, level = 9) => ({
+  id: slug(name), name, region, country: region === 'World' ? 'International' : region,
+  countries, kind: 'international', level, detail: 'detailed', startYear, frequency,
+});
 
 export const CORE_COMPETITIONS = [
-  { id: 'nba', name: 'NBA', region: 'North America', country: 'USA / Canada', kind: 'league', level: 10, detail: 'detailed' },
+  { id: 'nba', name: 'NBA', region: 'North America', country: 'USA / Canada', kind: 'league', level: 10, detail: 'detailed', featured: true },
   { id: 'nba-g-league', name: 'NBA G League', region: 'North America', country: 'USA', kind: 'league', level: 5, detail: 'detailed' },
   { id: 'ncaa-division-i', name: 'NCAA Division I', region: 'North America', country: 'USA', kind: 'league', level: 3, detail: 'detailed' },
-  { id: 'ncaa-tournament', name: 'NCAA Tournament', region: 'North America', country: 'USA', kind: 'tournament', level: 4, detail: 'detailed', source: 'NCAA Division I' },
-  { id: 'euroleague', name: 'EuroLeague', region: 'Europe', country: 'Europe', kind: 'continental', level: 9, detail: 'detailed' },
-  { id: 'eurocup', name: 'EuroCup', region: 'Europe', country: 'Europe', kind: 'continental', level: 7, detail: 'detailed' },
+  { id: 'ncaa-tournament', name: 'NCAA Tournament', region: 'North America', country: 'USA', kind: 'tournament', level: 4, detail: 'detailed', source: 'NCAA Division I', featured: true },
+  { id: 'euroleague', name: 'EuroLeague', region: 'Europe', country: 'Europe', kind: 'continental', level: 9, detail: 'detailed', featured: true },
+  { id: 'eurocup', name: 'EuroCup', region: 'Europe', country: 'Europe', kind: 'continental', level: 7, detail: 'detailed', featured: true },
+];
+
+export const INTERNATIONAL_COMPETITIONS = [
+  international('Olympic Basketball Tournament', 'World', null, 2028, 4, 10),
+  international('FIBA World Cup', 'World', null, 2027, 4, 10),
+  international('EuroBasket', 'Europe', ['Europe'], 2026, 4, 9),
+  international('FIBA AmeriCup', 'Americas', ['North America', 'South America'], 2026, 4, 7),
+  international('FIBA Asia Cup', 'Asia', ['Asia', 'Oceania'], 2026, 4, 7),
+  international('AfroBasket', 'Africa', ['Africa'], 2026, 4, 7),
 ];
 
 export const DETAILED_COUNTRY_COMPETITIONS = [
@@ -48,7 +61,8 @@ export const HIGH_LEVEL_COMPETITIONS = [
   league('African Basketball League', 'Africa', 'Africa', 1, 'high-level'),
 ];
 
-export const COMPETITIONS = [...CORE_COMPETITIONS, ...DETAILED_COUNTRY_COMPETITIONS, ...HIGH_LEVEL_COMPETITIONS];
+export const COMPETITIONS = [...CORE_COMPETITIONS, ...INTERNATIONAL_COMPETITIONS, ...DETAILED_COUNTRY_COMPETITIONS, ...HIGH_LEVEL_COMPETITIONS];
 export const COMPETITION_BY_NAME = new Map(COMPETITIONS.map((competition) => [competition.name, competition]));
 export const COMPETITION_BY_ID = new Map(COMPETITIONS.map((competition) => [competition.id, competition]));
 export const competitionId = (name) => COMPETITION_BY_NAME.get(name)?.id ?? slug(name);
+export const isCompetitionActive = (competition, year) => !competition.frequency || (year >= competition.startYear && (year - competition.startYear) % competition.frequency === 0);
