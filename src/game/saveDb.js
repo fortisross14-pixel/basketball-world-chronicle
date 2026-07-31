@@ -63,6 +63,7 @@ export async function writeSaveSlot(slot, name, universe) {
     week: universe.week,
     phase: universe.phase,
     yearReview: Boolean(universe.yearReview),
+    version: universe.version ?? 7,
     updatedAt: Date.now(),
   };
   const database = await openDatabase();

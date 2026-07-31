@@ -9,17 +9,19 @@ import {
   EUROCUP_CLUBS,
 } from '../data/teamData.js';
 import { COMPETITIONS, COMPETITION_BY_ID, competitionId, isCompetitionActive } from '../data/competitionData.js';
+import { EXPANDED_REAL_TEAMS, SUMMARY_REAL_TEAMS, NATIONAL_TEAM_COUNTRIES, NATIONAL_COLORS as WORLD_NATIONAL_COLORS } from '../data/worldData.js';
+import { REAL_PLAYER_POOLS, REAL_NAME_RATE, REAL_ACTIVE_TARGETS, REAL_ACTIVE_MAXIMUMS, ELITE_ACTIVE_TARGETS } from '../data/historicalPlayers.js';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
 export const POSITION_ORDER = POSITIONS;
 
 const REGION_BY_COUNTRY = {
-  USA: 'North America', Canada: 'North America', Spain: 'Europe', Greece: 'Europe', Turkey: 'Europe',
-  Italy: 'Europe', France: 'Europe', Germany: 'Europe', Lithuania: 'Europe', Israel: 'Europe', Russia: 'Europe',
-  Serbia: 'Europe', Slovenia: 'Europe', Montenegro: 'Europe', Croatia: 'Europe', Poland: 'Europe', Belgium: 'Europe',
-  Netherlands: 'Europe', UAE: 'Asia', Japan: 'Asia', China: 'Asia', 'South Korea': 'Asia', Philippines: 'Asia',
-  Australia: 'Oceania', 'New Zealand': 'Oceania', Argentina: 'South America', Brazil: 'South America',
-  Nigeria: 'Africa', Senegal: 'Africa', Angola: 'Africa', Tunisia: 'Africa', Egypt: 'Africa',
+  USA:'North America', Canada:'North America', Mexico:'North America', 'Puerto Rico':'North America', 'Dominican Republic':'North America', Bahamas:'North America', Panama:'North America',
+  Argentina:'South America', Brazil:'South America', Venezuela:'South America', Uruguay:'South America', Colombia:'South America',
+  Spain:'Europe', France:'Europe', Serbia:'Europe', Greece:'Europe', Turkey:'Europe', Italy:'Europe', Germany:'Europe', Lithuania:'Europe', Israel:'Europe', Russia:'Europe', Slovenia:'Europe', Montenegro:'Europe', Croatia:'Europe', Poland:'Europe', Belgium:'Europe', Netherlands:'Europe', Latvia:'Europe', Finland:'Europe', Georgia:'Europe', Czechia:'Europe', Ukraine:'Europe', 'Bosnia and Herzegovina':'Europe', Portugal:'Europe', Sweden:'Europe', Denmark:'Europe', Iceland:'Europe', Hungary:'Europe', Romania:'Europe', Bulgaria:'Europe', Switzerland:'Europe', Austria:'Europe',
+  UAE:'Asia', Japan:'Asia', China:'Asia', 'South Korea':'Asia', Philippines:'Asia', Iran:'Asia', Lebanon:'Asia', Jordan:'Asia', India:'Asia', 'Saudi Arabia':'Asia', Qatar:'Asia', Bahrain:'Asia', Kazakhstan:'Asia', 'Chinese Taipei':'Asia', Indonesia:'Asia',
+  Australia:'Oceania', 'New Zealand':'Oceania',
+  Nigeria:'Africa', Senegal:'Africa', Angola:'Africa', Tunisia:'Africa', Egypt:'Africa', Cameroon:'Africa', 'Ivory Coast':'Africa', Mali:'Africa', 'South Sudan':'Africa', 'DR Congo':'Africa', 'Cape Verde':'Africa', Uganda:'Africa', Rwanda:'Africa', Kenya:'Africa', Guinea:'Africa', Mozambique:'Africa',
 };
 const FOREIGN_COUNTRIES = Object.keys(REGION_BY_COUNTRY);
 
@@ -125,8 +127,8 @@ const OWNER_PROFILES = {
   'Fans consortium': { recruitment: 0, stability: 5, development: 2, patience: 4 },
   'Long-time team fan': { recruitment: 2, stability: 4, development: 3, patience: 3 },
 };
-const NATIONAL_COUNTRIES = ['USA','Canada','Spain','France','Serbia','Greece','Turkey','Italy','Germany','Lithuania','Israel','Russia','Slovenia','Croatia','Australia','China','Japan','Argentina','Brazil','Nigeria','Senegal','Angola'];
-const NATIONAL_COLORS = { USA:'#1D428A', Canada:'#D71920', Spain:'#C60B1E', France:'#0055A4', Serbia:'#C6363C', Greece:'#0D5EAF', Turkey:'#E30A17', Italy:'#008C45', Germany:'#111111', Lithuania:'#FDB913', Israel:'#1D428A', Russia:'#D52B1E', Slovenia:'#005DA4', Croatia:'#FF0000', Australia:'#FFCD00', China:'#DE2910', Japan:'#BC002D', Argentina:'#75AADB', Brazil:'#009739', Nigeria:'#008753', Senegal:'#00853F', Angola:'#CC092F' };
+const NATIONAL_COUNTRIES = NATIONAL_TEAM_COUNTRIES;
+const NATIONAL_COLORS = WORLD_NATIONAL_COLORS;
 const SALARY_TIERS = ['Minimum','Rotation','Starter','Star','Superstar'];
 
 const PRESTIGE_OVERRIDES = new Map([
@@ -312,6 +314,7 @@ function createPlayer(team, position, age, random, id, spawnYear, options = {}) 
     competitionId: team.competitionId, spawnYear, status: 'Active', draft: null, rightsTeamId: null,
     originRoute,
     nbaPreference: rarity.name === 'Generational' ? 1 : rarity.name === 'Legend' ? 0.95 : rarity.name === 'Epic' ? 0.76 : rarity.name === 'Rare' ? 0.42 : 0.18,
+    nationalCommitment: round(0.35 + random() * 0.65, 2), internationalRetired: false,
     europeanLifer: team.type === 'Pro' && !options.initial && (rarity.name === 'Legend' ? random() < 0.045 : rarity.name === 'Epic' ? random() < 0.10 : false),
     contract: null, contractHistory: [],
     honors: [], history: [], internationalHistory: [], careerEvents: [{ year: spawnYear, type: 'Debut', detail: `Entered the basketball world with ${team.name}.` }],
@@ -328,6 +331,127 @@ function createPlayer(team, position, age, random, id, spawnYear, options = {}) 
   return player;
 }
 
+
+function rarityDefinition(name) {
+  return RARITIES.find((item) => item.name === name) ?? RARITIES[0];
+}
+function refreshPlayerAfterTierChange(player, rarityName, random) {
+  const definition = rarityDefinition(rarityName);
+  const oldCurrent = player.current ?? 70;
+  player.rarity = rarityName;
+  player.birthRarity = rarityName;
+  player.base = integer(definition.base[0], definition.base[1], random);
+  player.birthBase = player.base;
+  player.careerYears = integer(definition.career[0], definition.career[1], random);
+  player.careerProfile = choice(CAREER_PROFILES, random);
+  player.careerCurve = createCareerCurve(player.careerProfile, player.careerYears);
+  if (player.originRoute === 'NCAA') {
+    player.ncaaCurve = createNcaaCurve(player.careerProfile);
+    player.proCurve = createPostCollegeCurve(player.careerProfile, player.careerYears);
+  }
+  player.careerYear = clamp(player.careerYear ?? Math.max(0, player.age - 18), 0, player.careerYears - 1);
+  player.developmentMultiplier = developmentMultiplier(player);
+  player.current = Math.round(clamp(player.base * player.developmentMultiplier * player.annualShape, 46, 99));
+  player.potential = Math.round(clamp(player.base * 1.02, player.base, 99));
+  const delta = player.current - oldCurrent;
+  ['inside','midrange','three','passing','rebounding','perimeterDefense','interiorDefense'].forEach((key) => {
+    player[key] = Math.round(clamp((player[key] ?? oldCurrent) + delta, 24, 99));
+  });
+  player.nbaPreference = rarityName === 'Generational' ? 1 : rarityName === 'Legend' ? 0.95 : rarityName === 'Epic' ? 0.76 : rarityName === 'Rare' ? 0.42 : 0.18;
+  player.europeanLifer = rarityName === 'Generational' ? false : player.europeanLifer;
+  player.stats = buildStats(player, random);
+  player.stats.drpg = round(Math.max(0.2, player.stats.rpg - player.stats.orpg), 1);
+  if (player.contract) player.contract.salaryTier = salaryTierFor(player);
+}
+function applyHistoricalIdentity(player, identity, random) {
+  if (!identity) return;
+  const [name, nationality, position, role] = identity;
+  player.name = name;
+  player.nationality = nationality;
+  player.region = REGION_BY_COUNTRY[nationality] ?? player.region;
+  player.position = position;
+  player.role = role;
+  player.body = choice(BODY_BY_POSITION[position], random);
+  player.height = integer(HEIGHT[position][0], HEIGHT[position][1], random);
+  player.realIdentity = true;
+  player.historicalArchetype = name;
+  player.careerEvents[0] = { ...player.careerEvents[0], detail: `${name} entered the basketball world with ${player.teamName}.` };
+  player.stats = buildStats(player, random);
+  player.stats.drpg = round(Math.max(0.2, player.stats.rpg - player.stats.orpg), 1);
+}
+function unusedHistoricalIdentity(rarity, usedNames, random, preferredNationality = null, preferredPosition = null) {
+  const all = REAL_PLAYER_POOLS[rarity] ?? [];
+  const unused = all.filter(([name]) => !usedNames.has(name));
+  if (!unused.length) return null;
+  const both = unused.filter(([, nationality, position]) => (!preferredNationality || nationality === preferredNationality) && (!preferredPosition || position === preferredPosition));
+  const byPosition = preferredPosition ? unused.filter(([, , position]) => position === preferredPosition) : [];
+  const byNationality = preferredNationality ? unused.filter(([, nationality]) => nationality === preferredNationality) : [];
+  return choice(both.length ? both : byPosition.length ? byPosition : byNationality.length ? byNationality : unused, random);
+}
+function seedOpeningElitePopulation(players, teams, random) {
+  const usedNames = new Set();
+  const teamById = new Map(teams.map((team) => [team.id, team]));
+  players.filter((player) => ['Epic','Legend','Generational'].includes(player.rarity)).forEach((player) => refreshPlayerAfterTierChange(player, 'Rare', random));
+  const usedPlayers = new Set();
+  const candidatePool = (predicate) => players.filter((player) => !usedPlayers.has(player.id) && predicate(player, teamById.get(player.teamId)));
+  const take = (rarity, count, buckets, realCount) => {
+    let assigned = 0;
+    for (const [bucketCount, predicate] of buckets) {
+      for (let index = 0; index < bucketCount && assigned < count; index += 1) {
+        const pool = candidatePool(predicate);
+        if (!pool.length) break;
+        const player = choice(pool, random);
+        usedPlayers.add(player.id);
+        refreshPlayerAfterTierChange(player, rarity, random);
+        const team = teamById.get(player.teamId);
+        const shouldUseReal = realCount > 0;
+        if (shouldUseReal) {
+          const preferredNationality = team?.type === 'NCAA' ? 'USA' : team?.type === 'Pro' ? team.country : null;
+          const identity = unusedHistoricalIdentity(rarity, usedNames, random, preferredNationality, team?.type === 'NCAA' ? player.position : null);
+          if (identity) { applyHistoricalIdentity(player, identity, random); usedNames.add(identity[0]); realCount -= 1; }
+        }
+        assigned += 1;
+      }
+    }
+    while (assigned < count) {
+      const pool = candidatePool(() => true);
+      if (!pool.length) break;
+      const player = choice(pool, random);
+      usedPlayers.add(player.id);
+      refreshPlayerAfterTierChange(player, rarity, random);
+      if (realCount > 0) {
+        const identity = unusedHistoricalIdentity(rarity, usedNames, random);
+        if (identity) { applyHistoricalIdentity(player, identity, random); usedNames.add(identity[0]); realCount -= 1; }
+      }
+      assigned += 1;
+    }
+  };
+  const isNBA = (_player, team) => team?.type === 'NBA';
+  const isEuro = (_player, team) => team?.type === 'Pro' && (team.secondaryCompetitionIds.includes('euroleague') || team.prestige >= 7.4);
+  const isNCAA = (player, team) => team?.type === 'NCAA' && player.age <= 20;
+  const isOtherPro = (_player, team) => team?.type === 'Pro';
+  take('Generational', ELITE_ACTIVE_TARGETS.Generational, [[2,isNBA],[1,(player,team)=>isNCAA(player,team)||isEuro(player,team)]], 2);
+  take('Legend', ELITE_ACTIVE_TARGETS.Legend, [[8,isNBA],[2,isEuro],[1,isNCAA],[1,isOtherPro]], 7);
+  take('Epic', ELITE_ACTIVE_TARGETS.Epic, [[15,isNBA],[8,isEuro],[5,isNCAA],[2,isOtherPro]], 11);
+  return [...usedNames];
+}
+function maybeApplyHistoricalIdentity(state, player) {
+  if (!['Epic','Legend','Generational'].includes(player.rarity) || player.realIdentity) return;
+  state.usedRealPlayerNames ??= [];
+  const used = new Set(state.usedRealPlayerNames);
+  const activeReal = state.players.filter((item) => !['Retired','Left professional basketball'].includes(item.status) && item.rarity === player.rarity && item.realIdentity).length;
+  const target = REAL_ACTIVE_TARGETS[player.rarity] ?? 0;
+  const maximum = REAL_ACTIVE_MAXIMUMS[player.rarity] ?? target;
+  const forceHistorical = activeReal < target;
+  if (activeReal >= maximum) return;
+  if (!forceHistorical && stateRandom(state) > (REAL_NAME_RATE[player.rarity] ?? 0)) return;
+  const team = state.teams.find((item) => item.id === player.teamId);
+  const preferredNationality = team?.type === 'NCAA' ? 'USA' : team?.type === 'Pro' ? team.country : null;
+  const identity = unusedHistoricalIdentity(player.rarity, used, () => stateRandom(state), preferredNationality, team?.type === 'NCAA' ? player.position : null);
+  if (!identity) return;
+  applyHistoricalIdentity(player, identity, () => stateRandom(state));
+  state.usedRealPlayerNames.push(identity[0]);
+}
 function weightedRarity(definitions, random) {
   return weightedChoice(definitions, definitions.map((item) => item.weight), random);
 }
@@ -389,10 +513,16 @@ function teamTalentClass(team) {
   if (team.prestige >= 7.2) return 'ProTop';
   return 'Pro';
 }
+const ADRIATIC_CLUBS = new Set(['Partizan','Crvena zvezda','Cedevita Olimpija','Buducnost','Mega Basket','FMP Belgrade','Spartak Subotica','Borac Cacak','Borac Čačak','Cibona Zagreb','Split','Zadar','Krka Novo Mesto','Dubai Basketball']);
+
 function createTeams() {
   let id = 1;
   const teams = [];
+  const seenTeams = new Set();
   const add = (data) => {
+    const teamKey = slug(data.name);
+    if (seenTeams.has(teamKey)) return;
+    seenTeams.add(teamKey);
     const primaryId = competitionId(data.competition);
     const secondaryCompetitionIds = (data.secondaryCompetitions ?? []).map(competitionId);
     const prestige = PRESTIGE_OVERRIDES.get(data.name) ?? (
@@ -416,10 +546,12 @@ function createTeams() {
   NBA_TEAMS.forEach((team) => add({ ...team, region: 'North America', competition: 'NBA', type: 'NBA', tier: 1, secondaryCompetitions: [] }));
   G_LEAGUE_TEAMS.forEach((team) => add({ ...team, region: 'North America', competition: team.league, type: 'GLeague', tier: 2, secondaryCompetitions: [] }));
   NCAA_PROGRAMS.forEach((team) => add({ ...team, region: 'North America', competition: 'NCAA Division I', type: 'NCAA', tier: 1, secondaryCompetitions: ['NCAA Tournament', team.conference] }));
-  EURO_TOP_CLUBS.forEach((team) => add({ ...team, region: 'Europe', competition: team.league, type: 'Pro', tier: 1, secondaryCompetitions: ['EuroLeague'] }));
-  EURO_DOMESTIC.forEach((team) => add({ ...team, region: 'Europe', competition: team.league, type: 'Pro', secondaryCompetitions: EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : [] }));
+  EURO_TOP_CLUBS.forEach((team) => add({ ...team, region: 'Europe', competition: team.league, type: 'Pro', tier: 1, secondaryCompetitions: ['EuroLeague', ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
+  EURO_DOMESTIC.forEach((team) => add({ ...team, region: 'Europe', competition: team.league, type: 'Pro', secondaryCompetitions: [...(EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : []), ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
   OTHER_PRO_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country], competition: team.league, type: 'Pro', tier: 1, secondaryCompetitions: [] }));
-  EXTENDED_PRO_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'Europe', competition: team.league, type: 'Pro', secondaryCompetitions: EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : [] }));
+  EXTENDED_PRO_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'Europe', competition: team.league, type: 'Pro', secondaryCompetitions: [...(EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : []), ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
+  EXPANDED_REAL_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'World', competition: team.league, type: 'Pro', secondaryCompetitions: [...(EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : []), ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
+  SUMMARY_REAL_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'World', competition: team.league, type: 'Pro', tier: 1, secondaryCompetitions: [] }));
   return teams;
 }
 
@@ -451,8 +583,9 @@ export function getCompetitionParticipants(universe, competitionIdValue) {
   if (!competition || !isCompetitionActive(competition, universe.year)) return [];
   if (competition.kind === 'international') {
     const national = universe.teams.filter((team) => team.type === 'National');
-    if (!competition.countries) return national;
-    return national.filter((team) => competition.countries.includes(team.region));
+    const eligible = competition.countries ? national.filter((team) => competition.countries.includes(team.region)) : national;
+    const fieldSize = competition.fieldSize ?? eligible.length;
+    return [...eligible].sort((a, b) => b.rating - a.rating || b.prestige - a.prestige).slice(0, fieldSize);
   }
   if (competition.kind === 'playoffs') return universe.teams.filter((team) => team.competition === competition.source);
   if (competition.kind === 'tournament' && competition.source) return universe.teams.filter((team) => team.competition === competition.source);
@@ -503,29 +636,74 @@ function recalculateTeamRatings(teams, players, coaches = [], owners = []) {
   });
 }
 
-function refreshNationalRosters(state) {
+function refreshNationalRosters(state, randomOverride = null) {
+  const random = randomOverride ?? (() => stateRandom(state));
+  const importanceByCompetition = {
+    'Olympic Basketball Tournament': 1,
+    'FIBA World Cup': 0.72,
+    EuroBasket: 0.62,
+    'FIBA AmeriCup': 0.34,
+    'FIBA Asia Cup': 0.50,
+    AfroBasket: 0.52,
+  };
+  const activeInternational = COMPETITIONS.filter((competition) => competition.kind === 'international' && isCompetitionActive(competition, state.year ?? 2026));
+  const reasonForAbsence = (player, competition, probability) => {
+    if (player.internationalRetired) return 'retired from international basketball';
+    if (player.age >= 33 && competition.name !== 'Olympic Basketball Tournament') return 'veteran rest';
+    if (player.teamType === 'NBA' && player.current >= 88 && competition.name === 'FIBA AmeriCup') return 'declined continental duty';
+    if (player.teamType === 'NBA' && competition.name !== 'Olympic Basketball Tournament' && player.current >= 85) return 'rest after the NBA season';
+    if (probability < 0.35) return 'club and workload management';
+    return 'not available for selection';
+  };
   state.teams.filter((team) => team.type === 'National').forEach((team) => {
-    let eligible = state.players.filter((player) => player.nationality === team.country && !['Retired','Left professional basketball'].includes(player.status) && player.teamType !== 'National');
-    // Small countries must retain enough selectable depth after retirements. These
-    // emergency players enter free agency; they are not academy products of an NBA club.
-    while (eligible.length < 10 && state.nextPlayerId != null) {
-      const random = () => stateRandom(state);
+    const competition = activeInternational
+      .filter((item) => !item.countries || item.countries.includes(team.region))
+      .sort((a, b) => b.level - a.level)[0] ?? { name: 'International window', level: 5 };
+    const importance = importanceByCompetition[competition.name] ?? 0.45;
+    let eligible = state.players.filter((player) => player.nationality === team.country && !['Retired','Left professional basketball'].includes(player.status) && player.teamType !== 'National' && !player.internationalRetired);
+    while (eligible.length < 14 && state.nextPlayerId != null) {
       const dummy = { id: null, name: 'Free Agency', country: team.country, region: team.region, type: 'FreeAgent', competition: 'Free Agency', competitionId: 'free-agency', talentClass: 'Tier2' };
       const position = POSITIONS[eligible.length % POSITIONS.length];
-      const player = createPlayer(dummy, position, integer(20, 28, random), random, state.nextPlayerId++, state.year, { talentClass: 'Tier2', nationality: team.country, originRoute: 'Domestic free agent' });
+      const player = createPlayer(dummy, position, integer(20, 28, random), random, state.nextPlayerId++, state.year ?? 2026, { talentClass: 'Tier2', nationality: team.country, originRoute: 'Domestic free agent', maxRarity: 'Rare' });
       player.teamId = null; player.teamName = 'Free Agent'; player.teamType = 'FreeAgent'; player.status = 'Free Agent'; player.contract = null;
       state.players.push(player);
       if (state.freeAgents && !state.freeAgents.includes(player.id)) state.freeAgents.push(player.id);
       eligible.push(player);
     }
-    eligible.sort((a, b) => b.current - a.current);
+    const evaluated = eligible.map((player) => {
+      const nbaStar = player.teamType === 'NBA' && player.current >= 86;
+      let probability = importance * 0.62 + player.nationalCommitment * 0.42;
+      if (competition.name === 'Olympic Basketball Tournament') probability += 0.26;
+      if (competition.name === 'FIBA World Cup') probability += player.age <= 27 ? 0.06 : 0;
+      if (competition.name === 'FIBA AmeriCup' && team.country === 'USA') probability -= nbaStar ? 0.68 : player.teamType === 'NBA' ? 0.35 : 0;
+      if (competition.name === 'FIBA World Cup' && team.country === 'USA') probability -= nbaStar ? 0.28 : 0.08;
+      if (player.teamType === 'NBA' && competition.name !== 'Olympic Basketball Tournament') probability -= 0.10;
+      if (player.age >= 32) probability -= competition.name === 'Olympic Basketball Tournament' ? 0.03 : 0.18;
+      if (player.age <= 24) probability += 0.08;
+      probability = clamp(probability, 0.03, 0.98);
+      return { player, probability, available: random() < probability };
+    });
+    const available = evaluated.filter((item) => item.available).sort((a, b) => b.player.current - a.player.current);
     const selected = [];
     POSITIONS.forEach((position) => {
-      const best = eligible.find((player) => player.position === position && !selected.includes(player));
-      if (best) selected.push(best);
+      const best = available.find((item) => item.player.position === position && !selected.includes(item.player));
+      if (best) selected.push(best.player);
     });
-    eligible.forEach((player) => { if (selected.length < 10 && !selected.includes(player)) selected.push(player); });
+    available.forEach((item) => { if (selected.length < 10 && !selected.includes(item.player)) selected.push(item.player); });
+    if (selected.length < 10) {
+      evaluated.filter((item) => !selected.includes(item.player)).sort((a, b) => (b.probability * 8 + b.player.current) - (a.probability * 8 + a.player.current)).forEach((item) => {
+        if (selected.length < 10) selected.push(item.player);
+      });
+    }
+    const selectedIds = new Set(selected.map((player) => player.id));
     team.rosterIds = selected.slice(0, 10).map((player) => player.id);
+    team.selectionCompetition = competition.name;
+    team.selectionYear = state.year ?? 2026;
+    team.unavailablePlayers = evaluated
+      .filter((item) => !selectedIds.has(item.player.id))
+      .sort((a, b) => b.player.current - a.player.current)
+      .slice(0, 10)
+      .map((item) => ({ playerId: item.player.id, name: item.player.name, current: item.player.current, team: item.player.teamName, reason: reasonForAbsence(item.player, competition, item.probability) }));
   });
 }
 
@@ -572,19 +750,22 @@ export function createUniverse(seed = 20260729) {
     }
   });
 
+  const usedRealPlayerNames = seedOpeningElitePopulation(players, teams, random);
+
   const nationalTeams = createNationalTeams(Math.max(...teams.map((team) => team.id)) + 1);
   teams.push(...nationalTeams);
   const initialFreeAgents = [];
   NATIONAL_COUNTRIES.forEach((country) => {
     while (players.filter((player) => player.nationality === country).length < 10) {
       const dummy = { id: null, name: 'Free Agency', country, region: REGION_BY_COUNTRY[country] ?? 'World', type: 'FreeAgent', competition: 'Free Agency', competitionId: 'free-agency', talentClass: 'Pro' };
-      const player = createPlayer(dummy, POSITIONS[players.filter((item) => item.nationality === country).length % 5], integer(19,27,random), random, playerId++, 2026, { initial: true, talentClass: 'Pro', nationality: country, originRoute: 'Domestic free agent' });
+      const player = createPlayer(dummy, POSITIONS[players.filter((item) => item.nationality === country).length % 5], integer(19,27,random), random, playerId++, 2026, { initial: true, talentClass: 'Pro', nationality: country, originRoute: 'Domestic free agent', maxRarity: 'Rare' });
       player.teamId = null; player.teamName = 'Free Agent'; player.teamType = 'FreeAgent'; player.status = 'Free Agent'; player.contract = null;
       players.push(player); initialFreeAgents.push(player.id);
     }
   });
-  const shell = { teams, players };
-  refreshNationalRosters(shell);
+  const shell = { teams, players, year: 2026, rngState: seed >>> 0, nextPlayerId: playerId, freeAgents: initialFreeAgents };
+  refreshNationalRosters(shell, random);
+  playerId = shell.nextPlayerId;
 
   teams.forEach((team) => {
     const coach = createCoach(team, random, coachId++, 2026);
@@ -597,10 +778,11 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 6, seed, rngState: seed >>> 0, year: 2026, week: 1, phase: 'Regular season', yearReview: false,
+    version: 8, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], results: [], promotions: [], competitionHistory: {},
+    usedRealPlayerNames, eliteRouteBalance: { NCAA: 0, International: 0 },
     nextPlayerId: playerId, nextCoachId: coachId, nextOwnerId: ownerId,
   };
 }
@@ -648,7 +830,11 @@ function currentTopTeams(state) {
 
 export function simulateWeeks(universe, numberOfWeeks) {
   if (universe.yearReview) return universe;
-  const state = structuredClone(universe);
+  // The universe can exceed tens of megabytes after several seasons. Mutate the
+  // active engine state and return a fresh root object instead of cloning the
+  // complete historical archive before every click. IndexedDB performs its own
+  // structured clone when a save is written.
+  const state = universe;
   const weeksToRun = Math.min(numberOfWeeks, 40 - state.week + 1);
   for (let index = 0; index < weeksToRun; index += 1) {
     COMPETITIONS.forEach((competition) => simulateCompetitionWeek(state, competition));
@@ -674,7 +860,7 @@ export function simulateWeeks(universe, numberOfWeeks) {
     state.phase = 'Year review';
     state.yearReview = true;
   }
-  return state;
+  return { ...state };
 }
 
 function standingsFor(state, competition) {
@@ -796,7 +982,9 @@ function finalizeSeason(state) {
     const mvpScores = players.map((player) => {
       const team = representedTeam(player);
       const championBonus = team?.id === championEntry.team.id ? 4.5 : 0;
-      return { player, team, score: playerCompetitionScore(player, championEntry.team.id, stateRandom(state)) + championBonus - recentMvpCount(player.id) * 5.5 };
+      const previousMvpWins = recentMvpCount(player.id);
+      const voterFatigue = previousMvpWins * 8.5 + (previousMvpWins >= 2 ? 30 : 0);
+      return { player, team, score: playerCompetitionScore(player, championEntry.team.id, stateRandom(state)) + championBonus - voterFatigue };
     });
     const mvpEntry = mvpScores.sort((a, b) => b.score - a.score)[0];
     const championPlayers = players.filter((player) => championPlayerIds.has(player.id) || player.teamId === championEntry.team.id);
@@ -1191,46 +1379,60 @@ function signBestFreeAgent(state, team, localOnly = false) {
 function createUnattachedProspect(state, nationality = 'USA', position = null, talentClass = 'NCAA', route = 'Undrafted free agent') {
   const random = () => stateRandom(state);
   const dummy = { id: null, name: 'Free Agency', country: nationality, region: REGION_BY_COUNTRY[nationality] ?? 'North America', type: 'FreeAgent', competition: 'Free Agency', competitionId: 'free-agency', talentClass };
-  const player = createPlayer(dummy, position ?? choice(POSITIONS, random), route === 'Undrafted free agent' ? 22 : 18, random, state.nextPlayerId++, state.year + 1, { talentClass, nationality, originRoute: route === 'Undrafted free agent' ? 'NCAA' : 'Open market' });
+  const player = createPlayer(dummy, position ?? choice(POSITIONS, random), route === 'Undrafted free agent' ? 22 : 18, random, state.nextPlayerId++, state.year + 1, { talentClass, nationality, originRoute: route === 'Undrafted free agent' ? 'NCAA' : 'Open market', maxRarity: 'Rare' });
   player.teamId = null; player.teamName = 'Free Agent'; player.teamType = 'FreeAgent'; player.status = 'Free Agent'; player.contract = null;
   player.careerEvents = [{ year: state.year + 1, type: route, detail: `Entered professional free agency as a ${route.toLowerCase()}.` }];
   state.players.push(player); state.freeAgents.push(player.id);
   return player;
 }
 
-function eliteRarityName(state) {
-  const roll = stateRandom(state);
-  if (roll < 0.03) return 'Generational';
-  if (roll < 0.22) return 'Legend';
-  return 'Epic';
-}
 function createAnnualTalentPlan(state) {
-  const eliteTotal = stateRandom(state) < 0.35 ? 10 : 8;
-  const perRoute = eliteTotal / 2;
+  state.eliteRouteBalance ??= { NCAA: 0, International: 0 };
+  const activeCounts = Object.fromEntries(Object.keys(ELITE_ACTIVE_TARGETS).map((rarity) => [rarity, state.players.filter((player) => player.rarity === rarity && !['Retired','Left professional basketball'].includes(player.status)).length]));
+  const eliteRarities = [];
+  ['Generational','Legend','Epic'].forEach((rarity) => {
+    const deficit = Math.max(0, ELITE_ACTIVE_TARGETS[rarity] - (activeCounts[rarity] ?? 0));
+    for (let index = 0; index < deficit; index += 1) eliteRarities.push(rarity);
+  });
+  // Keep the magical elite population controlled. Normal years replace only
+  // careers that have left the active world rather than manufacturing 8–10
+  // new superstars every summer.
+  const annualElite = eliteRarities.slice(0, 6);
+  for (let index = annualElite.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(stateRandom(state) * (index + 1));
+    [annualElite[index], annualElite[swap]] = [annualElite[swap], annualElite[index]];
+  }
+  let ncaaCount = Math.floor(annualElite.length / 2);
+  if (annualElite.length % 2 === 1 && state.eliteRouteBalance.NCAA <= state.eliteRouteBalance.International) ncaaCount += 1;
+  const ncaaRarities = annualElite.slice(0, ncaaCount);
+  const internationalRarities = annualElite.slice(ncaaCount);
+  state.eliteRouteBalance.NCAA += ncaaRarities.length;
+  state.eliteRouteBalance.International += internationalRarities.length;
+
   const ncaaOpenings = state.teams.filter((team) => team.type === 'NCAA').flatMap((team) => {
     const roster = rosterPlayers(state, team);
     const coach = state.coaches.find((item) => item.id === team.coachId);
-    return POSITIONS
-      .filter((position) => !roster.some((player) => player.position === position))
-      .map((position) => ({
-        key: `${team.id}-${position}`,
-        score: team.prestige * 2.2 + (coach?.development ?? 65) * 0.035 + stateRandom(state) * 8,
-      }));
+    return POSITIONS.filter((position) => !roster.some((player) => player.position === position)).map((position) => ({
+      key: `${team.id}-${position}`,
+      score: team.prestige * 2.2 + (coach?.development ?? 65) * 0.035 + stateRandom(state) * 8,
+    }));
   });
-  const assignmentPool = [...ncaaOpenings].sort((a, b) => b.score - a.score).slice(0, Math.max(perRoute * 8, 24));
+  const assignmentPool = [...ncaaOpenings].sort((a, b) => b.score - a.score).slice(0, Math.max(ncaaRarities.length * 10, 24));
   const ncaaAssignments = {};
-  for (let index = 0; index < perRoute && assignmentPool.length; index += 1) {
+  ncaaRarities.forEach((rarity) => {
+    if (!assignmentPool.length) return;
     const pickIndex = Math.floor(stateRandom(state) * assignmentPool.length);
     const [assignment] = assignmentPool.splice(pickIndex, 1);
-    ncaaAssignments[assignment.key] = eliteRarityName(state);
-  }
+    ncaaAssignments[assignment.key] = rarity;
+  });
   const internationalSpawns = 80;
   state.talentPlan = {
     year: state.year + 1,
     ncaaAssignments,
-    internationalElite: Array.from({ length: perRoute }, () => eliteRarityName(state)),
+    internationalElite: [...internationalRarities],
     internationalRemaining: internationalSpawns,
     internationalSpawns,
+    plannedElite: annualElite.length,
   };
 }
 function plannedRarity(state, route, teamId = null, position = null) {
@@ -1246,6 +1448,7 @@ function plannedRarity(state, route, teamId = null, position = null) {
   plan.internationalRemaining = Math.max(0, remaining - 1);
   return useElite ? { forcedRarity: pool.pop(), maxRarity: null } : { forcedRarity: null, maxRarity: 'Rare' };
 }
+
 function academyDevelopmentScore(state, team) {
   const coach = state.coaches.find((item) => item.id === team.coachId);
   const owner = state.owners.find((item) => item.id === team.ownerId);
@@ -1279,8 +1482,9 @@ function generateInternationalYouthClass(state) {
     });
     assignContract(player, selected, state.year + 1, random, 3);
     state.players.push(player);
+    maybeApplyHistoricalIdentity(state, player);
     selected.rosterIds.push(player.id);
-    state.currentSpawns.push({ playerId: player.id, player: player.name, team: selected.name, position, nationality: player.nationality, rarity: player.rarity, route: 'Club academy' });
+    state.currentSpawns.push({ playerId: player.id, player: player.name, team: selected.name, position, nationality: player.nationality, rarity: player.rarity, route: 'Club academy', realIdentity: Boolean(player.realIdentity), historicalArchetype: player.historicalArchetype ?? null });
   }
 }
 
@@ -1342,7 +1546,7 @@ function ensureLocalQuota(state, team) {
         const academy = createPlayer(team, position, 18, random, state.nextPlayerId++, state.year + 1, { talentClass: academyClass, forceLocal: true, originRoute: 'Club academy', maxRarity: 'Rare' });
         assignContract(academy, team, state.year + 1, random);
         state.players.push(academy); team.rosterIds.push(academy.id);
-        state.currentSpawns.push({ playerId: academy.id, player: academy.name, team: team.name, position, nationality: academy.nationality, rarity: academy.rarity, route: 'Local academy' });
+        state.currentSpawns.push({ playerId: academy.id, player: academy.name, team: team.name, position, nationality: academy.nationality, rarity: academy.rarity, route: 'Local academy', realIdentity: Boolean(academy.realIdentity), historicalArchetype: academy.historicalArchetype ?? null });
       }
     }
     roster = rosterPlayers(state, team); locals = roster.filter((player) => isLocalForTeam(player, team)).length;
@@ -1359,8 +1563,8 @@ function fillRosters(state) {
           const random = () => stateRandom(state);
           const rarityPlan = plannedRarity(state, 'NCAA', team.id, position);
           const player = createPlayer(team, position, 18, random, state.nextPlayerId++, state.year + 1, { talentClass: 'NCAA', forceLocal: stateRandom(state) < 0.8, originRoute: 'NCAA', ...rarityPlan });
-          state.players.push(player); team.rosterIds.push(player.id);
-          state.currentSpawns.push({ playerId: player.id, player: player.name, team: team.name, position, nationality: player.nationality, rarity: player.rarity, route: 'NCAA freshman' });
+          state.players.push(player); maybeApplyHistoricalIdentity(state, player); team.rosterIds.push(player.id);
+          state.currentSpawns.push({ playerId: player.id, player: player.name, team: team.name, position, nationality: player.nationality, rarity: player.rarity, route: 'NCAA freshman', realIdentity: Boolean(player.realIdentity), historicalArchetype: player.historicalArchetype ?? null });
         }
       });
       while (team.rosterIds.length > 5) {
@@ -1389,7 +1593,7 @@ function fillRosters(state) {
       const player = createPlayer(team, position, 18, random, state.nextPlayerId++, state.year + 1, { talentClass: academyClass, forceLocal, originRoute: 'Club academy', maxRarity: 'Rare' });
       assignContract(player, team, state.year + 1, random);
       state.players.push(player); team.rosterIds.push(player.id);
-      state.currentSpawns.push({ playerId: player.id, player: player.name, team: team.name, position, nationality: player.nationality, rarity: player.rarity, route: 'Club academy' });
+      state.currentSpawns.push({ playerId: player.id, player: player.name, team: team.name, position, nationality: player.nationality, rarity: player.rarity, route: 'Club academy', realIdentity: Boolean(player.realIdentity), historicalArchetype: player.historicalArchetype ?? null });
     }
     while (team.rosterIds.length > team.targetRoster) {
       const extra = rosterPlayers(state, team).sort((a, b) => rosterValue(a) - rosterValue(b))[0];
@@ -1498,7 +1702,9 @@ function resetSeason(state) {
 
 export function advanceToNextYear(universe) {
   if (!universe.yearReview) return universe;
-  const state = structuredClone(universe);
+  // Avoid cloning the full Chronicle archive. The UI receives a new root object
+  // at the end, while the engine updates the active save in place.
+  const state = universe;
   state.freeAgents = state.freeAgents ?? [];
   state.retirements = state.retirements ?? [];
   state.coachTransactions = state.coachTransactions ?? [];
@@ -1522,7 +1728,7 @@ export function advanceToNextYear(universe) {
   state.teams = recalculateTeamRatings(state.teams, state.players, state.coaches, state.owners);
   resetSeason(state);
   state.year += 1; state.week = 1; state.phase = 'Regular season'; state.yearReview = false; state.finalizedYear = null;
-  return state;
+  return { ...state };
 }
 
 export function competitionRankings(universe, competitionIdValue) {

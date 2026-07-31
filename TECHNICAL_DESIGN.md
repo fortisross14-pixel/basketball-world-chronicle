@@ -1,130 +1,108 @@
-# Basketball World Chronicle — Technical Design v0.7.0
+# Basketball World Chronicle — Technical Design v0.8.0
 
-## 1. Product objective
+## 1. Design promise
 
-Basketball World Chronicle is an observer-driven global history simulator. The player does not manage one franchise. The player advances an interconnected basketball world and follows careers, dynasties, failed prospects, draft rights, transfers, national-team generations, coaching journeys and changes in club ownership.
-
-The core loop is:
-
-1. Advance one week, four weeks or to year review.
-2. Read current leaders and award races.
-3. Open a tournament, bracket, team, player or coach.
-4. Follow permanent annual records and honors.
-5. Stop at year review and inspect official outcomes.
-6. Run the complete offseason market.
-7. Begin the next season in a changed world.
-
-## 2. Platform and project structure
-
-- Vite single-page application
-- React UI
-- Pure deterministic JavaScript simulation engine
-- Static GitHub Pages deployment
-- No server dependency in v0.7
+The game is a persistent alternate basketball history, not an NBA season simulator. Its value comes from being able to follow any entity across decades:
 
 ```text
-src/App.jsx                    navigation and Chronicle pages
-src/styles.css                 responsive visual system
-src/game/universe.js           generation, season, market and history engine
-src/game/saveDb.js             three-slot IndexedDB persistence
-src/data/teamData.js           team identities and color palettes
-src/data/competitionData.js    tournament hierarchy and cadence
-scripts/validate.mjs           deterministic long-run validation
-BALANCE_REPORT.md              measured balance output
+NCAA prospect
+→ drafted by San Antonio
+→ two limited NBA seasons
+→ free agency
+→ Panathinaikos
+→ EuroLeague MVP
+→ NBA return
+→ retirement
+→ Hall of Fame debate
 ```
 
-Simulation controls are global and appear above navigation. They are not part of the menu.
+The simulation must preserve enough immutable facts to reconstruct that journey from player, team, competition, draft, country and national-team pages.
 
+## 2. Application architecture
 
-## 2.1 Persistence architecture
+### 2.1 Runtime
 
-The browser client exposes three save slots. Persistence uses IndexedDB because the initial universe is approximately 4.5 MB before long-term history accumulation. localStorage is intentionally not used.
+- Vite.
+- React 18.
+- Plain JavaScript data/engine modules.
+- IndexedDB persistence.
+- Static GitHub Pages deployment.
 
-Two object stores are maintained:
+### 2.2 Routing
+
+Hash routing avoids server rewrite requirements on GitHub Pages.
 
 ```text
-save-metadata   slot, name, year, week, phase, updatedAt
-save-slots      slot, complete structured-clone universe
+#/world
+#/results
+#/region/:region
+#/country/:country
+#/competition/:competitionId
+#/team/:teamId
+#/national-team/:teamId
+#/player/:playerId
+#/coach/:coachId
+#/market/:tab
 ```
 
-The home screen reads only metadata. Full universe data is loaded only when the user continues a slot. Simulation and offseason writes are queued in order, preventing a slower earlier save from overwriting a newer state.
+The simulation state lives above the route renderer. Route changes alter only presentation.
 
-The application saves after:
+Browser history is authoritative for Back and Forward. Breadcrumbs are derived from entity relationships.
 
-- New-universe creation
-- Every simulation action
-- Every offseason transition
-- Manual Save
-- Returning Home
+## 3. World detail levels
 
-A React error boundary converts render failures into a reload path rather than an unrecoverable blank screen.
+### 3.1 Detailed countries
 
-## 3. Navigation
+Twenty-four countries have authored club lists and colors, full top divisions, cups, supercups and selected second tiers.
 
-Primary navigation:
+Each detailed club stores:
 
-- World
-- Results
-- Tournaments
-- Teams
-- Players
-- Coaches
-- Market
-- Statistics
-- The Global Five
-- Almanac
+```js
+{
+  id,
+  name,
+  country,
+  region,
+  color,
+  competition,
+  competitionId,
+  secondaryCompetitions,
+  secondaryCompetitionIds,
+  tier,
+  prestige,
+  rosterIds,
+  coachId,
+  ownerId,
+  seasonRecords,
+  honors,
+  history,
+  transactions
+}
+```
 
-Full-page detail routes:
+### 3.2 High-level countries
 
-- Player
-- Team
-- Coach
-- Competition
+Thirty countries use six real clubs and a lighter league simulation. They still participate in the same player, transfer, awards and history systems.
 
-Every roster, ranking, result, draft selection, award and transaction supports click-through navigation.
+### 3.3 National-team-only depth
 
-## 4. Universe model
+The national pool reaches 75 countries. Countries without a detailed domestic system receive enough domestic free-agent depth to construct valid rosters and generate international histories.
 
-### 4.1 Team entities
-
-| Layer | Entities | Named roster |
-|---|---:|---:|
-| NBA | 30 | 10 |
-| G League | 14 | 10 |
-| Selected NCAA Division I | 200 | 5 |
-| Other professional clubs | 158 | 10 |
-| National teams | 22 | selected 10 |
-| **Total** | **424** | — |
-
-National-team rosters reference existing players. They do not duplicate careers.
-
-### 4.2 NCAA abstraction
-
-Each NCAA program stores only:
+## 4. Team populations
 
 ```text
-1 PG · 1 SG · 1 SF · 1 PF · 1 C
+NBA             30 × 10 players
+G League        31 × 10 players
+NCAA           200 × 5 players
+Other pros     474 × 10 players
+National teams  75 selected rosters; no duplicate player entities
 ```
 
-Opening cohorts are distributed across ages 18 through 21. Scheduled senior exits plus limited elite early declarations create approximately 230–280 annual exits.
+National teams reference existing club/free-agent players. They do not own duplicate copies.
 
-### 4.3 Professional roster rule
+## 5. Player identity
 
-Every professional club finishes the offseason with exactly 10 registered players. Temporary vacancies and overages are allowed only during market processing.
-
-Local minimums:
-
-- NBA: 6 USA/Canada players
-- Other professional clubs: 5 players from the team's country
-
-NCAA-alumni caps:
-
-- EuroLeague club: 4
-- Other non-NBA professional club: 3
-
-## 5. Permanent player identity
-
-A player is created with a permanent birth package:
+### 5.1 Permanent birth package
 
 ```js
 {
@@ -134,483 +112,281 @@ A player is created with a permanent birth package:
   birthBase,
   careerYears,
   careerProfile,
-  nationality,
-  position,
-  height,
-  body,
-  role,
-  originRoute,
   careerCurve,
-  ncaaCurve,
-  proCurve
+  position,
+  role,
+  body,
+  height,
+  nationality,
+  originRoute,
+  realIdentity,
+  historicalArchetype
 }
 ```
 
-The following never change:
+`rarity === birthRarity` and `base === birthBase` are hard validation rules.
 
-- Rarity
-- Base level
-- Career length
-- Career profile
-- Physical and basketball archetype
+### 5.2 Rarity bands
 
-A Legend is always a Legend, including as an unfinished college freshman or declining veteran.
+| Rarity | Base | Career years |
+|---|---:|---:|
+| Common | 66–72 | 6–10 |
+| Uncommon | 73–78 | 7–11 |
+| Rare | 79–83 | 8–12 |
+| Epic | 84–88 | 10–13 |
+| Legend | 89–93 | 12–15 |
+| Generational | 94–98 | 14–18 |
 
-The validator explicitly checks:
+### 5.3 Controlled elite population
 
-```text
-player.rarity === player.birthRarity
-player.base   === player.birthBase
-```
-
-## 6. Development and current ability
-
-### 6.1 General formula
+The active world targets exactly:
 
 ```text
-current ability = base × development multiplier × annual shape
+Generational 3
+Legend      12
+Epic        30
 ```
 
-Annual shape remains a separate small year-to-year variation. It never changes rarity or base.
+Annual elite generation replaces vacancies instead of adding an uncontrolled new batch every year.
 
-### 6.2 NCAA development phase
+Elite replacement routes remain balanced between NCAA and international clubs. NBA receives zero generated players after universe creation.
 
-Players created in NCAA receive a dedicated four-stage college curve. Values vary by career profile but remain between `0.75` and `0.89`.
+### 5.4 Historical identity mixture
 
-Examples:
+Historical identity pools are independent from rarity. A historical name inherits the rarity assigned by its pool and then lives a new procedural career.
+
+Active targets:
 
 ```text
-Young prodigy     0.82 → 0.87 → 0.89 → 0.89
-Classic prime     0.78 → 0.82 → 0.86 → 0.89
-Late bloomer      0.75 → 0.79 → 0.83 → 0.88
-Early peak        0.81 → 0.86 → 0.89 → 0.89
-Durable veteran   0.77 → 0.82 → 0.86 → 0.89
-Volatile talent   0.79 → 0.84 → 0.81 → 0.88
+Real Generational 1–2 / 3
+Real Legend       6–8 / 12, target 7
+Real Epic         9–13 / 30, target 11
 ```
 
-This allows NCAA to contain many future stars without turning 18-year-olds into finished professional superstars.
+Used names are stored in `usedRealPlayerNames`, preventing duplicates.
 
-### 6.3 Professional transition for NCAA players
+## 6. Development model
 
-After leaving NCAA, the player switches to a separate adult curve beginning around `0.90`. Adult career multipliers are capped at `1.01` before annual shape.
+### 6.1 NCAA curve
 
-The college and professional curves are displayed together on the player page, with the active season highlighted.
+A college player expresses only part of permanent base talent.
 
-### 6.4 International professional prospects
-
-Players generated directly in non-NBA professional clubs use the normal career profile from age 18. They can mature slightly faster than NCAA players because they are already playing professionally.
-
-## 7. Annual player generation
-
-### 7.1 NBA restriction
-
-NBA player generation is allowed only during creation of a brand-new universe to seed the opening rosters at different career stages.
-
-After the opening universe:
+Typical ranges:
 
 ```text
-NBA-generated players per year = 0
+Freshman   0.75–0.82
+Sophomore  0.79–0.86
+Junior     0.82–0.88
+Senior     0.85–0.89
 ```
 
-NBA roster acquisition routes are limited to:
+No NCAA multiplier can exceed `0.89`.
 
-- Draft
-- Draft-rights activation
-- Free agency
-- Trade / transfer
-- G League or international recruitment
+### 6.2 Professional curve
 
-NBA and G League roster filling searches existing players. It cannot create emergency academy prospects.
-
-### 7.2 NCAA freshmen
-
-Every vacant NCAA position receives an 18-year-old replacement. Nationality logic remains:
-
-- Approximately 80% USA
-- Approximately 20% international
-
-### 7.3 International club youth class
-
-Each offseason creates 80 eighteen-year-old players in non-NBA professional club systems.
-
-Club selection is weighted by:
-
-- Club prestige
-- Coach development ability
-- Owner/president development bonus
-- Controlled randomness
-
-Nationality logic remains:
-
-- Approximately 80% team-country nationality
-- Approximately 20% foreign
-
-A club can receive at most two youth promotions in one annual class.
-
-### 7.4 Elite birth budget
-
-Each annual class contains either eight or ten Epic-or-better births.
-
-The split is exact:
+After leaving NCAA, the player switches to a separate adult curve:
 
 ```text
-50% NCAA
-50% international club systems
-0% NBA
+approximately 0.90 → 1.01 → decline
 ```
 
-Elite rarity distribution within that budget is approximately:
+One-and-done prospects begin professional development earlier. Four-year players arrive more polished but have fewer pre-prime professional seasons.
 
-- Epic: 78%
-- Legend: 19%
-- Generational: 3%
+### 6.3 Current ability
 
-Non-elite generation is capped at Rare so uncontrolled weighted rolls cannot break the annual elite budget.
+```text
+current = clamp(base × developmentMultiplier × annualShape)
+```
 
-NCAA elite assignments are weighted toward major programs and strong development coaches. They are not permanently locked to the same schools.
+Annual shape changes performance, never rarity or base.
 
-The engine stores an annual `talentHistory` record:
+## 7. NBA acquisition model
+
+NBA roster creation is permitted only at world initialization.
+
+Later acquisition routes:
+
+- Two-round, 60-pick draft.
+- Rights activation.
+- Free agency.
+- Trades.
+- G League movement.
+- International buyout/recruitment.
+
+NBA teams have no academy and no emergency spawn method.
+
+### 7.1 Draft composition
+
+Target draft mix:
+
+```text
+approximately 46 NCAA selections
+approximately 14 international/G League selections
+60 total
+```
+
+Draft selection does not guarantee immediate NBA registration. Teams may sign zero, one or two picks and retain rights to the others.
+
+### 7.2 NCAA exits
+
+Around 250 NCAA starters leave each year. Outcomes:
+
+- Drafted and signed.
+- Drafted and stashed.
+- G League.
+- International professional contract.
+- Free agency.
+- Exit from active professional basketball.
+
+Every outcome is archived.
+
+### 7.3 Elite migration
+
+- Generational: effectively mandatory NBA destination once mature.
+- Legend: very high NBA pressure.
+- Epic: high pressure if current/potential level supports it.
+- 89+ outside NBA: immediate priority recruitment.
+- Generational European-lifer chance: zero.
+- Legend and Epic European-lifer chance: rare.
+
+## 8. National-team system
+
+### 8.1 Competition calendar
+
+```text
+EuroBasket / AmeriCup / Asia Cup / AfroBasket: every 4 years
+FIBA World Cup: every 4 years
+Olympics: every 4 years
+```
+
+### 8.2 Field sizes
+
+```text
+Olympics 12
+World Cup 32
+EuroBasket 24
+AmeriCup 12
+Asia Cup 16
+AfroBasket 16
+```
+
+### 8.3 Availability score
+
+```text
+availability = tournamentImportance
+             + nationalCommitment
+             + youthOpportunity
+             + OlympicMotivation
+             - NBAStarRest
+             - playoffWorkload
+             - veteranRest
+             - clubManagement
+```
+
+The roster constructor first attempts positional coverage, then fills the remaining places by availability-adjusted value.
+
+Non-selected high-value players receive explicit reasons stored in `team.unavailablePlayers`.
+
+## 9. Competition simulation and archive
+
+Each competition defines:
 
 ```js
 {
-  year,
-  ncaaElite,
-  internationalElite,
-  totalElite,
-  ncaaShare
-}
-```
-
-## 8. NBA migration model
-
-### 8.1 Design target
-
-International clubs should create great players and meaningful histories, but almost every mature Generational player and most Legends should eventually reach the NBA.
-
-### 8.2 NBA preference
-
-Permanent NBA preference by rarity:
-
-- Generational: effectively mandatory destination
-- Legend: very high
-- Epic: high when current ability/potential supports it
-- Rare and below: situational
-
-### 8.3 European-lifer exception
-
-A small minority of non-initial international players can receive `europeanLifer`:
-
-- Legend: approximately 4.5%
-- Epic: approximately 10%
-- Generational: 0%
-
-This allows occasional Bodiroga/Navarro/Spanoulis-style histories without making them the normal outcome.
-
-### 8.4 Migration pressure
-
-Annual NBA-migration probability uses:
-
-- Rarity
-- Current ability
-- Base level and youth potential
-- Age
-- Existing NBA rights
-- European-lifer exception
-- Available NBA roster replacement value
-
-Current ability of 89+ creates near-immediate migration pressure.
-
-NBA teams evaluate young prospects using current level plus future potential rather than current ability alone.
-
-## 9. Team strength hierarchy
-
-### 9.1 Raw rating
-
-Raw rating is based on the active rotation:
-
-- NCAA: all five named players
-- Professional teams: strongest eight, with reduced weighting for bench slots 6–8
-
-### 9.2 World rating
-
-```text
-world rating = raw roster
-             + league context
-             + coach bonus
-             + owner bonus
-             + institutional floor where applicable
-```
-
-Current context adjustments make NBA depth decisively stronger than EuroLeague continuity.
-
-Target hierarchy:
-
-```text
-NBA average          approximately 89–91
-EuroLeague average   approximately 75–78
-NCAA average         approximately 58–60
-Top NCAA programs    approximately 70–75
-```
-
-A top NCAA team can contain exceptional prospects and sit near elite European level, but it must remain below the NBA due to youth, depth, strength and professional continuity.
-
-### 9.3 League-strength UI
-
-The World page calculates live competition strength from participating team ratings and displays the top current competitions.
-
-## 10. Player production
-
-Tracked annual player data:
-
-- Games and minutes
-- PPG
-- RPG, ORPG and DRPG
-- APG
-- SPG and BPG
-- FG%, 3P% and FT%
-- Current ability
-- Contract snapshot
-- Honors earned that year
-
-The statistical model uses position, role, attributes, minutes, current ability and competition context.
-
-## 11. Career and honors history
-
-A player retains separate records for:
-
-- Annual club career
-- National-team tournament career
-- Team titles
-- Individual awards
-- Contract history
-- Draft selection
-- NBA rights
-- Career events and transactions
-
-Player honors are grouped by year and split into compact categories:
-
-```text
-2027
-Titles   [EuroLeague] [Serbian League]
-Awards   [EuroLeague MVP] [EuroLeague Playoff MVP]
-```
-
-This supports the central Chronicle story:
-
-```text
-NCAA prospect
-→ NBA draft pick
-→ two marginal NBA seasons
-→ European transfer
-→ EuroLeague MVP
-→ possible NBA return
-```
-
-## 12. Competition hierarchy and pages
-
-Tournament browser:
-
-```text
-Continent
-  → top competitions
-  → country
-      → all country competitions
-```
-
-Competition page tabs:
-
-### Overview
-
-- Current standings/seeding
-- Projected MVP
-- Current points, rebounds and assists leaders
-
-### Bracket
-
-- Edition selector
-- Every knockout matchup and score
-- Winner highlighting
-- Clickable teams
-
-### Seasons
-
-- Champion
-- Runner-up
-- MVP
-- Finals/Playoff MVP
-- Statistical leaders
-
-### Rankings
-
-- Top 10 total points
-- Top 10 rebounds
-- Top 10 assists
-- Teams with most wins
-- Teams with most titles
-
-### Teams
-
-- Current participants
-- Team rating and country
-- Direct links to team pages
-
-## 13. International competitions
-
-The universe includes:
-
-- Olympic Basketball Tournament
-- FIBA World Cup
-- EuroBasket
-- FIBA AmeriCup
-- FIBA Asia Cup
-- AfroBasket
-
-Four-year cadence preserves scarcity. National-team appearances are stored separately on player pages.
-
-## 14. Contracts, draft and free agency
-
-Every active professional player has:
-
-```js
-{
-  teamId,
-  team,
+  id,
+  name,
+  region,
+  country,
+  kind,
+  level,
+  detail,
+  fieldSize,
   startYear,
-  endYear,
-  salaryTier
+  frequency
 }
 ```
 
-Salary tiers:
+Annual competition archives contain:
 
-- Minimum
-- Rotation
-- Starter
-- Star
-- Superstar
+- Standings/seeding.
+- Champion and runner-up.
+- MVP.
+- Finals/playoff MVP.
+- Points, rebounds and assists leaders.
+- Knockout bracket rounds and scores.
+- Team records.
 
-NBA Draft:
+All-time rankings aggregate archived season data rather than current screen state.
 
-- 60 picks
-- 46 NCAA prospects
-- 14 international/G League prospects
-- 0–2 immediate signings per NBA team
-- Separate NBA-rights ledger
-- Draft-and-stash careers supported
+## 10. Staff and leadership
 
-Undrafted NCAA exits can:
+### 10.1 Coaches
 
-- Sign in the G League
-- Sign internationally
-- Remain free agents
-- Leave active professional basketball
+Every team has exactly one coach with:
 
-## 15. Offseason order
+- Rarity and permanent base.
+- Offense, defense, development, rotations and playoff adjustment.
+- Tactical profile.
+- Contract and career history.
+- Titles and awards.
+
+Coaches can be hired, fired, become free agents, move countries and retire.
+
+### 10.2 President/owner
+
+Every club receives one president/owner mandate lasting 5–20 years.
+
+Profiles include:
+
+- Celebrity.
+- Venture capital.
+- Oil money.
+- Investment fund.
+- Fans consortium.
+- Long-time supporter.
+
+Bonuses influence recruitment, patience, stability and development. Completed mandates remain in team history.
+
+## 11. Save architecture
+
+IndexedDB stores:
 
 ```text
-1. Age professionals and process retirements
-2. Contract expiry and extensions
-3. Coach firings, contracts and retirements
-4. Ownership mandate changes
-5. Identify NCAA exit class
-6. NBA Draft
-7. Immediate draft signings
-8. NCAA graduation / draft-and-stash free agency
-9. Age remaining NCAA players
-10. Create annual elite talent plan
-11. Generate international youth class
-12. NBA migration and international transfers
-13. Promotion and relegation
-14. Free-agent signings and roster completion
-15. Archive excess unsigned players
-16. Refresh national teams
-17. Recalculate world ratings
-18. Open the next season
+save-slots     full universe state
+save-metadata  lightweight home-screen information
 ```
 
-## 16. Coaches and owners
+Three fixed slots are supported.
 
-### Coaches
+Writes are serialized through a promise queue. Simulation commits the new React state and immediately queues the same object for persistence.
 
-Every team has one coach with:
+Save metadata includes universe version. Legacy v0.7 saves remain loadable, but a new v0.8 save is required to instantiate the expanded world dataset.
 
-- Permanent rarity and base
-- Current ability
-- Offense, defense, development and rotations
-- Playoff adjustments and man-management
-- Style
-- Contract
-- Annual team record and honors
-- Firings, free agency, appointments and retirement
+## 12. Performance rules
 
-### Presidents / owners
+The engine mutates its controlled universe object during simulation and returns a new root object for React. It does not structured-clone tens of megabytes before every action.
 
-Each team has one leadership figure with:
+Long-term history remains attached to entities, while UI calculations derive maps and filtered collections only for the active route.
 
-- Rarity
-- 5–20 year mandate
-- Celebrity, venture capital, oil money, investment fund, fans consortium or long-time fan profile
-- Recruitment, stability, development and patience bonuses
+## 13. Deterministic validation
 
-Completed mandates are archived permanently.
+The validator checks:
 
-## 17. Deterministic validation
-
-`npm run validate` runs a fast two-seed, five-season integrity suite. `npm run validate:full` runs three seeds for ten seasons each. Both verify:
-
-### Structural integrity
-
-- 200 NCAA teams with exactly five positions
-- 10-player professional rosters
-- Correct contracts and national-team eligibility
-- Local-player and NCAA-alumni limits
-
-### Permanent identity
-
-- No rarity changes
-- No base-level changes
-- NCAA curve always between 0.75 and 0.89
-
-### Generation
-
-- Eight or ten annual Epic+ births
-- Exactly 50% of Epic+ births in NCAA
-- Exactly 50% in international club systems
-- Zero post-opening NBA spawns
-
-### Pipeline
-
-- 230–280 NCAA exits
-- 60 draft picks
-- 46 NCAA / 14 international selections
-- Selective immediate NBA signings
-- At least 170 undrafted college exits
-
-### Hierarchy and migration
-
-- NBA average at least nine points above EuroLeague after ten years
-- Best EuroLeague team below weakest NBA team in tested universes
-- Top NCAA programs within eight points of EuroLeague average
-- No mature Generational player retained in a non-NBA professional league
-- No 89+ player sustainably outside NBA
-
-### Historical diversity
-
-- Champion and MVP rotation
-- Stored brackets and awards
-- Correct FIBA cadence
-- Coaching and ownership turnover
-- Retirements and unsuccessful exits
-
-## 18. Current implementation boundary
-
-The current engine is a strong Chronicle foundation with deterministic season and market logic. Future depth can add:
-
-- Possession-level games and box scores
-- More detailed salary-cap accounting
-- Multi-team trade AI
-- Conference-specific NCAA tournaments and selection bubbles
-- EuroLeague qualification/licensing changes
-- Cloud saves and multi-slot persistence
-
-These additions can use the existing player, team, competition and history entities without rebuilding navigation or career records.
+- 200 NCAA teams with exactly one player per position.
+- 31 G League teams.
+- 75 national teams.
+- 10-player professional rosters.
+- Local-player minimums.
+- NCAA alumni caps outside the NBA.
+- Valid contracts.
+- Permanent rarity and base.
+- NCAA cap.
+- Exact elite counts and historical-name proportions.
+- International field sizes.
+- USA AmeriCup star absences.
+- 60-pick drafts and plausible graduate outcomes.
+- Zero NBA spawning.
+- NBA/EuroLeague/NCAA hierarchy.
+- Champion and MVP diversity.
+- Stored brackets and awards.
+- No mature Generational or 89+ player remaining sustainably outside NBA.

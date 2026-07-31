@@ -20,7 +20,7 @@ export const EURO_TOP_CLUBS = [
   ['AS Monaco', 'France', 'LNB Pro A', '#E2001A'], ['Paris Basketball', 'France', 'LNB Pro A', '#111111'],
   ['Bayern Munich', 'Germany', 'Basketball Bundesliga', '#DC052D'], ['ALBA Berlin', 'Germany', 'Basketball Bundesliga', '#FFDD00'],
   ['Žalgiris Kaunas', 'Lithuania', 'Lithuanian LKL', '#007A33'], ['Maccabi Tel Aviv', 'Israel', 'Israeli Premier League', '#F7C600'],
-  ['Partizan', 'Serbia', 'Adriatic League', '#111111'], ['Crvena zvezda', 'Serbia', 'Adriatic League', '#D71920'],
+  ['Partizan', 'Serbia', 'KLS Serbia', '#111111'], ['Crvena zvezda', 'Serbia', 'KLS Serbia', '#D71920'],
   ['Dubai Basketball', 'UAE', 'Adriatic League', '#6E2C91'], ['Hapoel Tel Aviv', 'Israel', 'Israeli Premier League', '#D71920'],
 ].map(([name, country, league, color]) => ({ name, country, league, color, euroLeague: true }));
 
@@ -39,8 +39,8 @@ export const EURO_DOMESTIC = [
   ['Limoges CSP', 'France', 'LNB Pro A', '#007A33', 1], ['Orléans Loiret', 'France', 'Pro B', '#D71920', 2],
   ['Ratiopharm Ulm', 'Germany', 'Basketball Bundesliga', '#F58220', 1], ['Telekom Baskets Bonn', 'Germany', 'Basketball Bundesliga', '#E2001A', 1],
   ['Tigers Tübingen', 'Germany', 'ProA Germany', '#F7C600', 2], ['Phoenix Hagen', 'Germany', 'ProA Germany', '#E2001A', 2],
-  ['Cedevita Olimpija', 'Slovenia', 'Adriatic League', '#F58220', 1], ['Buducnost', 'Montenegro', 'Adriatic League', '#1D428A', 1],
-  ['Mega Basket', 'Serbia', 'Adriatic League', '#F05A28', 1], ['Borac Čačak', 'Serbia', 'KLS Serbia', '#D71920', 2],
+  ['Cedevita Olimpija', 'Slovenia', 'Slovenian League', '#F58220', 1], ['Buducnost', 'Montenegro', 'Montenegrin League', '#1D428A', 1],
+  ['Mega Basket', 'Serbia', 'KLS Serbia', '#F05A28', 1], ['Borac Čačak', 'Serbia', 'KLS Serbia', '#D71920', 2],
 ].map(([name, country, league, color, tier]) => ({ name, country, league, color, tier, euroLeague: false }));
 
 const C = {
@@ -115,19 +115,25 @@ export const OTHER_PRO_TEAMS = [
 ].map(([name, country, league, color]) => ({ name, country, league, color }));
 
 export const G_LEAGUE_TEAMS = [
-  ['Austin Spurs','#C4CED4'], ['College Park Skyhawks','#E03A3E'], ['Delaware Blue Coats','#006BB6'],
-  ['Grand Rapids Gold','#0E2240'], ['Greensboro Swarm','#1D1160'], ['Iowa Wolves','#0C2340'],
-  ['Long Island Nets','#000000'], ['Maine Celtics','#007A33'], ['Memphis Hustle','#5D76A9'],
-  ['Motor City Cruise','#C8102E'], ['Ontario Clippers','#C8102E'], ['Osceola Magic','#0077C0'],
-  ['Rio Grande Valley Vipers','#CE1141'], ['Santa Cruz Warriors','#1D428A'],
-].map(([name, color]) => ({ name, color, country: 'USA', league: 'NBA G League' }));
+  ['Austin Spurs','#C4CED4','USA'], ['Capital City Go-Go','#002B5C','USA'], ['Cleveland Charge','#860038','USA'],
+  ['Coachella Valley Lakers','#552583','USA'], ['College Park Skyhawks','#E03A3E','USA'], ['Delaware Blue Coats','#006BB6','USA'],
+  ['Grand Rapids Gold','#0E2240','USA'], ['Greensboro Swarm','#1D1160','USA'], ['Iowa Wolves','#0C2340','USA'],
+  ['Laketown Squadron','#002B5C','USA'], ['Long Island Nets','#000000','USA'], ['Maine Celtics','#007A33','USA'],
+  ['Memphis Hustle','#5D76A9','USA'], ['Mexico City Capitanes','#CE1126','Mexico'], ['Motor City Cruise','#C8102E','USA'],
+  ['Noblesville Boom','#002D62','USA'], ['Oklahoma City Blue','#007AC1','USA'], ['Osceola Magic','#0077C0','USA'],
+  ['Raptors 905','#CE1141','Canada'], ['Rio Grande Valley Vipers','#CE1141','USA'], ['Rip City Remix','#E03A3E','USA'],
+  ['Salt Lake City Stars','#002B5C','USA'], ['San Diego Clippers','#C8102E','USA'], ['Santa Cruz Warriors','#1D428A','USA'],
+  ['Sioux Falls Skyforce','#98002E','USA'], ['Stockton Kings','#5A2D81','USA'], ['Texas Legends','#00538C','USA'],
+  ['Valley Suns','#1D1160','USA'], ['Westchester Knicks','#006BB6','USA'], ['Windy City Bulls','#CE1141','USA'],
+  ['Wisconsin Herd','#00471B','USA'],
+].map(([name, color, country]) => ({ name, color, country, league: 'NBA G League' }));
 
 // Additional clubs used by the expanded Chronicle universe. The data intentionally
 // focuses on recognizable clubs and enough depth to support domestic cups,
 // promotion/relegation and believable international player movement.
 export const EXTENDED_PRO_TEAMS = [
   // Spain
-  ['UCAM Murcia','Spain','Liga ACB','#C8102E',1], ['Lenovo Tenerife','Spain','Liga ACB','#F7C600',1],
+  ['UCAM Murcia','Spain','Liga ACB','#C8102E',1],
   ['Basket Zaragoza','Spain','Liga ACB','#D71920',1], ['Bilbao Basket','Spain','Liga ACB','#111111',1],
   // Greece
   ['AEK Athens','Greece','Greek League','#F7C600',1], ['Promitheas Patras','Greece','Greek League','#E2001A',1],
@@ -145,7 +151,7 @@ export const EXTENDED_PRO_TEAMS = [
   ['MHP Riesen Ludwigsburg','Germany','Basketball Bundesliga','#F7C600',1], ['Würzburg Baskets','Germany','Basketball Bundesliga','#C8102E',1],
   ['Brose Bamberg','Germany','Basketball Bundesliga','#C8102E',1], ['Science City Jena','Germany','ProA Germany','#1D428A',2],
   // Serbia and Adriatic
-  ['FMP Belgrade','Serbia','Adriatic League','#C8102E',1], ['Spartak Subotica','Serbia','Adriatic League','#1D428A',1],
+  ['FMP Belgrade','Serbia','KLS Serbia','#C8102E',1], ['Spartak Subotica','Serbia','KLS Serbia','#1D428A',1],
   ['KK Vojvodina','Serbia','KLS Serbia','#C8102E',2], ['Zlatibor','Serbia','KLS Serbia','#F7C600',2],
   // Lithuania
   ['Rytas Vilnius','Lithuania','Lithuanian LKL','#C8102E',1], ['Wolves Vilnius','Lithuania','Lithuanian LKL','#111111',1],

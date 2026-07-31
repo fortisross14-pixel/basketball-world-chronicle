@@ -319,3 +319,42 @@ tr.clickable:hover { background: #f4ecdf; }
 }
 .error-screen pre { max-width: 900px; overflow: auto; padding: 13px; border: 1px solid #d9b4ae; border-radius: 7px; background: #fff8f6; color: #7c2d24; white-space: pre-wrap; }
 .error-screen .button { align-self: flex-start; margin-top: 8px; }
+
+/* v0.8 connected-world navigation, country and national-team pages */
+.breadcrumbs { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: -2px 0 18px; color: var(--muted); font-size: .72rem; }
+.breadcrumbs button { padding: 0; border: 0; background: transparent; color: var(--accent-dark); font: inherit; font-weight: 800; cursor: pointer; }
+.breadcrumbs button:hover { text-decoration: underline; }
+.breadcrumbs span { color: #a69680; }
+.region-web-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 13px; }
+.region-web-card { min-height: 145px; display: grid; grid-template-columns: 48px minmax(0,1fr) 18px; align-items: start; gap: 12px; padding: 19px; border: 1px solid #d5c6af; border-radius: 10px; background: #fffdf8; color: var(--dark); text-align: left; cursor: pointer; box-shadow: 0 6px 18px rgb(49 38 23 / .05); }
+.region-web-card:hover { transform: translateY(-2px); border-color: #a98245; box-shadow: 0 9px 24px rgb(49 38 23 / .10); }
+.region-web-card h3 { margin: 0 0 5px; font-family: Georgia,serif; font-size: 1.25rem; }
+.region-web-card p { margin: 0 0 10px; color: var(--muted); font-size: .72rem; }
+.region-web-card > b { align-self: center; color: var(--accent); font-size: 1.35rem; }
+.region-web-flag { font-size: 1.8rem; }
+.mini-chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.mini-chip-row span { padding: 3px 6px; border-radius: 10px; background: #eee4d4; color: #5d4d39; font-size: .58rem; font-weight: 800; }
+.section-gap { margin-top: 20px; }
+.country-summary-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 16px; margin-bottom: 20px; }
+.country-national-card { min-height: 200px; }
+.national-team-link { width: 100%; display: grid; grid-template-columns: 58px minmax(0,1fr) 18px; align-items: center; gap: 12px; padding: 13px; border: 1px solid #d8cbb7; border-radius: 9px; background: #f5ede0; color: var(--dark); text-align: left; cursor: pointer; }
+.national-team-link:hover { background: #ecdfca; }
+.national-team-link div { display: flex; flex-direction: column; gap: 3px; }
+.national-team-link strong { font-size: 1rem; }
+.national-team-link span,.national-team-link small { color: var(--muted); font-size: .7rem; }
+.availability-list { display: flex; flex-direction: column; }
+.availability-list button { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 4px; border: 0; border-bottom: 1px solid #e2d6c4; background: transparent; color: var(--dark); text-align: left; cursor: pointer; }
+.availability-list button:hover { background: #faf4e9; }
+.availability-list button div { display: flex; flex-direction: column; gap: 3px; }
+.availability-list span { color: var(--muted); font-size: .7rem; }
+.availability-list em { max-width: 42%; color: #8a4e3e; font-size: .7rem; font-style: normal; font-weight: 800; text-align: right; }
+.historical-identity-badge { display: inline-block; margin-left: 9px; padding: 4px 7px; border: 1px solid #c7a158; border-radius: 12px; background: #f4e4bb; color: #694b12; font-family: system-ui,sans-serif; font-size: .55rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
+@media (max-width: 1020px) { .region-web-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 760px) { .country-summary-grid { grid-template-columns: 1fr; } .region-web-grid { grid-template-columns: 1fr; } .availability-list button { align-items: flex-start; flex-direction: column; gap: 4px; } .availability-list em { max-width: none; text-align: left; } }
+
+.legacy-save-note {
+  display: block;
+  margin: 8px 0;
+  color: #8a5a16;
+  line-height: 1.35;
+}
