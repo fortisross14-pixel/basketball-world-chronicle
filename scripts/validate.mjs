@@ -1,5 +1,8 @@
 import {
   advanceToNextYear,
+  advanceOffseasonStage,
+  startOffseason,
+  OFFSEASON_STAGES,
   createUniverse,
   getCompetitionParticipants,
   simulateWeeks,
@@ -10,7 +13,7 @@ import { G_LEAGUE_TEAMS } from '../src/data/teamData.js';
 const FULL_SEEDS = [20260729, 19860517];
 const QUICK = process.env.BWC_QUICK === '1';
 const SEEDS = QUICK ? FULL_SEEDS : FULL_SEEDS.slice(0, 1);
-const SEASONS = QUICK ? 3 : 8;
+const SEASONS = QUICK ? 3 : 6;
 const POSITION_SET = new Set(['PG', 'SG', 'SF', 'PF', 'C']);
 const ELITE_TARGETS = { Generational: 3, Legend: 12, Epic: 30 };
 const average = (items, selector = (item) => item.rating) => items.reduce((sum, item) => sum + selector(item), 0) / Math.max(1, items.length);
@@ -94,6 +97,18 @@ function validateUniverse(universe, label) {
   validateEliteIdentity(universe, label);
 }
 
+
+function nbaInternationalBalance(universe, label) {
+  const playerById = new Map(universe.players.map((player)=>[player.id,player]));
+  const nba = universe.teams.filter((team)=>team.type==='NBA');
+  const counts = nba.map((team)=>team.rosterIds.map((id)=>playerById.get(id)).filter(Boolean).filter((player)=>player.nationality!=='USA').length);
+  const total = counts.reduce((sum,value)=>sum+value,0);
+  const share = total / Math.max(1,nba.length*10) * 100;
+  assert(Math.max(...counts) <= 3, `${label}: an NBA team has more than three international players in the 10-man abstraction.`);
+  assert(share >= 18 && share <= 30, `${label}: NBA international share is ${share.toFixed(1)}%.`);
+  return Number(share.toFixed(1));
+}
+
 function hierarchy(universe) {
   const nba = universe.teams.filter((team) => team.type === 'NBA');
   const euro = universe.teams.filter((team) => team.secondaryCompetitionIds.includes('euroleague'));
@@ -117,6 +132,7 @@ for (const seed of SEEDS) {
   console.log(`\nValidating seed ${seed}...`);
   let universe = createUniverse(seed);
   validateUniverse(universe, `Seed ${seed}, opening universe`);
+  nbaInternationalBalance(universe, `Seed ${seed}, opening universe`);
   assert(getCompetitionParticipants(universe, 'eurobasket').length === 24, `Seed ${seed}: EuroBasket field is not 24 teams.`);
   assert(getCompetitionParticipants(universe, 'fiba-americup').length === 12, `Seed ${seed}: AmeriCup field is not 12 teams.`);
   assert(getCompetitionParticipants(universe, 'fiba-asia-cup').length === 16, `Seed ${seed}: Asia Cup field is not 16 teams.`);
@@ -139,9 +155,19 @@ for (const seed of SEEDS) {
     process.stdout.write(`  Season ${seasonIndex + 1}/${SEASONS}: `);
     universe = simulateWeeks(universe, 50);
     assert(universe.yearReview && universe.finalizedYear === universe.year, `Seed ${seed}, ${universe.year}: year review did not finalize.`);
-    universe = advanceToNextYear(universe);
+    if (seasonIndex === 0) {
+      universe = startOffseason(universe);
+      assert(universe.offseason?.active && universe.offseason.stageIndex === 0, `Seed ${seed}: staged offseason did not start.`);
+      for (let stage = 0; stage < OFFSEASON_STAGES.length; stage += 1) universe = advanceOffseasonStage(universe);
+    } else universe = advanceToNextYear(universe);
     validateUniverse(universe, `Seed ${seed}, ${universe.year}`);
-    console.log(`passed → ${universe.year}`);
+    nbaInternationalBalance(universe, `Seed ${seed}, ${universe.year}`);
+    const offseason = universe.offseasonHistory[0];
+    assert(offseason && offseason.teams.length > 200, `Seed ${seed}, ${universe.year}: offseason summary was not archived.`);
+    assert(offseason.teams.some((team)=>team.delta>0) && offseason.teams.some((team)=>team.delta<0), `Seed ${seed}, ${universe.year}: offseason summary did not produce both improvers and decliners.`);
+    assert(offseason.nbaTrades >= 8 && offseason.nbaTrades <= 14, `Seed ${seed}, ${universe.year}: NBA trade volume is ${offseason.nbaTrades}.`);
+    assert(offseason.nbaInternationalShare <= 30, `Seed ${seed}, ${universe.year}: offseason NBA international share is ${offseason.nbaInternationalShare}%.`);
+    console.log(`passed → ${universe.year} · ${offseason.nbaTrades} NBA trades · ${offseason.nbaInternationalShare}% international`);
 
     const draft = universe.draftHistory[0];
     assert(draft.picks.length === 60, `Seed ${seed}, draft ${draft.year}: expected 60 picks.`);

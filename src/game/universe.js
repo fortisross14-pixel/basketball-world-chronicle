@@ -236,6 +236,10 @@ function localCountries(team) {
 }
 function chooseNationality(team, random, forceLocal = false) {
   const locals = localCountries(team);
+  if (team.type === 'NBA') {
+    if (forceLocal || random() < 0.5) return random() < 0.9 ? 'USA' : 'Canada';
+    return choice(FOREIGN_COUNTRIES.filter((country) => !['USA','Canada'].includes(country)), random);
+  }
   if (forceLocal || random() < 0.8) return choice(locals, random);
   return choice(FOREIGN_COUNTRIES.filter((country) => !locals.includes(country)), random);
 }
@@ -535,7 +539,7 @@ function createTeams() {
       id: id++, wins: 0, losses: 0, rosterIds: [], rating: 70, rawRating: 70,
       history: [], honors: [], transactions: [], leadershipHistory: [], seasonRecords: {},
       targetRoster: data.type === 'NCAA' ? 5 : 10,
-      localMinimum: data.type === 'NCAA' ? 4 : data.type === 'NBA' ? 6 : 5,
+      localMinimum: data.type === 'NCAA' ? 4 : data.type === 'NBA' ? 7 : 5,
       prestige: round(prestige,1), competitionId: primaryId, secondaryCompetitionIds,
       ...data,
     };
@@ -707,6 +711,29 @@ function refreshNationalRosters(state, randomOverride = null) {
   });
 }
 
+function rebalanceOpeningNBANationalities(players, teams, random) {
+  const nbaTeams = teams.filter((team)=>team.type==='NBA');
+  const preferredForeign = ['Canada','France','Australia','Germany','Serbia','Spain','Lithuania','Greece','Slovenia','Brazil','Argentina','Nigeria','Cameroon','Japan'];
+  nbaTeams.forEach((team)=>{
+    const roster=()=>team.rosterIds.map((id)=>players.find((player)=>player.id===id)).filter(Boolean);
+    const target = team.id % 3 === 0 ? 2 : 3;
+    let international = roster().filter((player)=>player.nationality!=='USA');
+    while (international.length > target) {
+      const candidate = international.filter((player)=>!player.realIdentity).sort((a,b)=>a.current-b.current)[0];
+      if (!candidate) break;
+      candidate.nationality='USA'; candidate.region='North America'; candidate.name=playerName('USA',random);
+      international = roster().filter((player)=>player.nationality!=='USA');
+    }
+    while (international.length < target) {
+      const candidate = roster().filter((player)=>player.nationality==='USA'&&!player.realIdentity).sort((a,b)=>a.current-b.current)[0];
+      if (!candidate) break;
+      const nationality=choice(preferredForeign,random);
+      candidate.nationality=nationality; candidate.region=REGION_BY_COUNTRY[nationality]??candidate.region; candidate.name=playerName(nationality,random);
+      international = roster().filter((player)=>player.nationality!=='USA');
+    }
+  });
+}
+
 export function createUniverse(seed = 20260729) {
   const random = createRandom(seed);
   let teams = createTeams();
@@ -751,6 +778,7 @@ export function createUniverse(seed = 20260729) {
   });
 
   const usedRealPlayerNames = seedOpeningElitePopulation(players, teams, random);
+  rebalanceOpeningNBANationalities(players, teams, random);
 
   const nationalTeams = createNationalTeams(Math.max(...teams.map((team) => team.id)) + 1);
   teams.push(...nationalTeams);
@@ -778,10 +806,10 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 8, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
+    version: 9, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
-    draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], results: [], promotions: [], competitionHistory: {},
+    draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {},
     usedRealPlayerNames, eliteRouteBalance: { NCAA: 0, International: 0 },
     nextPlayerId: playerId, nextCoachId: coachId, nextOwnerId: ownerId,
   };
@@ -1106,7 +1134,7 @@ function finalizeSeason(state) {
 function logTransaction(state, player, type, fromTeam, toTeam, detail) {
   const from = fromTeam?.name ?? (player.status === 'Free Agent' ? 'Free Agency' : 'Basketball');
   const to = toTeam?.name ?? (type === 'Retirement' ? 'Retired' : type.includes('Free agent') || type.includes('Contract expired') || type.includes('Released') ? 'Free Agency' : 'Outside active basketball');
-  const transaction = { year: state.year, type, playerId: player.id, player: player.name, fromTeamId: fromTeam?.id ?? null, from, toTeamId: toTeam?.id ?? null, to, headline: `${player.name}: ${from} → ${to}`, detail };
+  const transaction = { year: state.year, type, playerId: player.id, player: player.name, rarity: player.rarity, position: player.position, current: player.current, fromTeamId: fromTeam?.id ?? null, from, toTeamId: toTeam?.id ?? null, to, headline: `${player.name}: ${from} → ${to}`, detail };
   state.transactions.unshift(transaction);
   player.careerEvents.push({ year: state.year, type, detail: transaction.headline + (detail ? ` — ${detail}` : '') });
   if (fromTeam) fromTeam.transactions.unshift(transaction);
@@ -1218,6 +1246,16 @@ function runDraft(state, exitClass) {
 function isLocalForTeam(player, team) {
   return localCountries(team).includes(player.nationality);
 }
+function isNBAInternational(player) {
+  return player.nationality !== 'USA';
+}
+function nbaInternationalCount(state, team) {
+  return rosterPlayers(state, team).filter(isNBAInternational).length;
+}
+function nbaCanAcceptNationality(state, team, player) {
+  if (team.type !== 'NBA' || !isNBAInternational(player)) return true;
+  return nbaInternationalCount(state, team) < 3;
+}
 function rosterPlayers(state, team) {
   return team.rosterIds.map((id) => state.players.find((player) => player.id === id)).filter(Boolean);
 }
@@ -1229,12 +1267,21 @@ function ncaaAlumniCount(state, team) {
 }
 function canAcceptPlayer(state, team, player) {
   if (['NCAA','National'].includes(team.type)) return false;
+  if (!nbaCanAcceptNationality(state, team, player)) return false;
   if (team.type === 'Pro' && player.originRoute === 'NCAA') {
     const cap = team.secondaryCompetitionIds.includes('euroleague') ? 4 : 3;
     if (ncaaAlumniCount(state, team) >= cap) return false;
   }
   if (isLocalForTeam(player, team)) return true;
   return foreignCount(state, team) < team.targetRoster - team.localMinimum;
+}
+function openNBAInternationalSlotForElite(state, team, incoming) {
+  if (team.type !== 'NBA' || !isNBAInternational(incoming) || nbaInternationalCount(state, team) < 3) return true;
+  if (!(incoming.current >= 89 || ['Generational','Legend'].includes(incoming.rarity))) return false;
+  const weakestInternational = rosterPlayers(state, team).filter(isNBAInternational).sort((a,b)=>rosterValue(a)-rosterValue(b))[0];
+  if (!weakestInternational || rosterValue(incoming) < rosterValue(weakestInternational) + 1) return false;
+  releaseToFreeAgency(state, weakestInternational, 'NBA release', `${team.name} opened an international roster place for an elite incoming player.`);
+  return true;
 }
 function weakestReplaceable(state, team, incoming) {
   const roster = rosterPlayers(state, team).sort((a, b) => rosterValue(a) - rosterValue(b));
@@ -1256,10 +1303,11 @@ function signDraftPicks(state, draft) {
     picks.forEach((pick) => {
       const player = state.players.find((item) => item.id === pick.playerId);
       if (!player || joined >= 2) return;
+      if (!nbaCanAcceptNationality(state, team, player)) return;
       const vacancy = team.rosterIds.length < team.targetRoster;
       const weakest = rosterPlayers(state, team).sort((a, b) => a.current - b.current)[0];
-      const threshold = pick.round === 1 ? 74 : 77;
-      const probability = pick.round === 1 ? 0.66 : 0.30;
+      const threshold = pick.round === 1 ? 72 : 75;
+      const probability = pick.round === 1 ? 0.78 : 0.42;
       const shouldJoin = player.current >= threshold && (vacancy || (weakest && player.current >= weakest.current + 3)) && stateRandom(state) < probability;
       if (!shouldJoin) return;
       if (!vacancy && weakest) releaseToFreeAgency(state, weakest, 'NBA release', `Waived to create a place for pick ${pick.pick}.`);
@@ -1298,7 +1346,57 @@ function ageRemainingCollege(state, exitIds) {
     if (!updatePlayerForNewYear(player, random)) archivePlayer(state, player, 'Left professional basketball');
   });
 }
+function nbaSwapIsValid(state, teamA, playerA, teamB, playerB) {
+  const rosterA = rosterPlayers(state, teamA).filter((player) => player.id !== playerA.id).concat(playerB);
+  const rosterB = rosterPlayers(state, teamB).filter((player) => player.id !== playerB.id).concat(playerA);
+  const localsA = rosterA.filter((player) => isLocalForTeam(player, teamA)).length;
+  const localsB = rosterB.filter((player) => isLocalForTeam(player, teamB)).length;
+  const internationalA = rosterA.filter(isNBAInternational).length;
+  const internationalB = rosterB.filter(isNBAInternational).length;
+  return localsA >= teamA.localMinimum && localsB >= teamB.localMinimum && internationalA <= 3 && internationalB <= 3;
+}
+function executeNBASwap(state, teamA, playerA, teamB, playerB) {
+  removeFromTeam(teamA, playerA.id); removeFromTeam(teamB, playerB.id);
+  teamA.rosterIds.push(playerB.id); teamB.rosterIds.push(playerA.id);
+  const update = (player, destination) => {
+    player.teamId = destination.id; player.teamName = destination.name; player.teamType = destination.type;
+    player.competition = destination.competition; player.competitionId = destination.competitionId; player.status = 'Active';
+    if (player.contract) player.contract.teamId = destination.id;
+  };
+  update(playerA, teamB); update(playerB, teamA);
+  logTransaction(state, playerA, 'NBA trade', teamA, teamB, `Player-for-player trade involving ${playerB.name}. Contract carried to the new team.`);
+  logTransaction(state, playerB, 'NBA trade', teamB, teamA, `Player-for-player trade involving ${playerA.name}. Contract carried to the new team.`);
+}
+function runNBATrades(state) {
+  const teams = state.teams.filter((team) => team.type === 'NBA');
+  const targetTrades = integer(8, 14, () => stateRandom(state));
+  let completed = 0;
+  let attempts = 0;
+  while (completed < targetTrades && attempts < targetTrades * 80) {
+    attempts += 1;
+    const teamA = teams[Math.floor(stateRandom(state) * teams.length)];
+    let teamB = teams[Math.floor(stateRandom(state) * teams.length)];
+    if (!teamA || !teamB || teamA.id === teamB.id) continue;
+    const eligibleA = rosterPlayers(state, teamA).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational');
+    const eligibleB = rosterPlayers(state, teamB).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational');
+    if (!eligibleA.length || !eligibleB.length) continue;
+    const sortedA = [...eligibleA].sort((a,b)=>rosterValue(a)-rosterValue(b));
+    const poolA = stateRandom(state) < 0.15 ? sortedA.slice(-5) : sortedA.slice(0, Math.min(7, sortedA.length));
+    const playerA = poolA[Math.floor(stateRandom(state) * poolA.length)];
+    const valueA = rosterValue(playerA);
+    const matches = eligibleB.filter((player) => Math.abs(rosterValue(player) - valueA) <= 8 && player.id !== playerA.id && isNBAInternational(player) === isNBAInternational(playerA))
+      .sort((a,b)=>Math.abs(rosterValue(a)-valueA)-Math.abs(rosterValue(b)-valueA));
+    if (!matches.length) continue;
+    const playerB = matches[Math.floor(stateRandom(state) * Math.min(4, matches.length))];
+    if (!nbaSwapIsValid(state, teamA, playerA, teamB, playerB)) continue;
+    executeNBASwap(state, teamA, playerA, teamB, playerB);
+    completed += 1;
+  }
+  return completed;
+}
+
 function runPlayerTransfers(state) {
+  runNBATrades(state);
   const nbaCandidates = state.players.filter((player) => player.teamType === 'NBA' && player.age >= 23 && player.current <= 78 && player.history.filter((season) => season.competition === 'NBA').length >= 2);
   nbaCandidates.forEach((player) => {
     if (stateRandom(state) > 0.18) return;
@@ -1325,13 +1423,13 @@ function runPlayerTransfers(state) {
         return rosterValue(aWeak ?? { current: 0, age: 30, base: 0 }) - rosterValue(bWeak ?? { current: 0, age: 30, base: 0 });
       });
     const threshold = ['Generational','Legend'].includes(player.rarity) ? -2 : player.rarity === 'Epic' ? 0 : 2;
-    const destination = candidates.find((team) => releaseWeakestFor(state, team, player, threshold));
+    const destination = candidates.find((team) => (nbaCanAcceptNationality(state, team, player) || openNBAInternationalSlotForElite(state, team, player)) && releaseWeakestFor(state, team, player, threshold));
     if (!destination) return;
     movePlayer(state, player, destination, 'NBA transfer', player.rightsTeamId === destination.id ? `${destination.name} activated its draft rights.` : 'Signed after elite international production.');
     const right = state.draftRights.find((item) => item.playerId === player.id && item.active);
     if (right) right.active = false;
   });
-  const proMovers = state.players.filter((player) => player.teamType === 'Pro' && player.status === 'Active' && player.age >= 22 && stateRandom(state) < 0.025);
+  const proMovers = state.players.filter((player) => player.teamType === 'Pro' && player.status === 'Active' && player.age >= 22 && stateRandom(state) < 0.04).slice(0, 90);
   proMovers.forEach((player) => {
     const candidates = state.teams.filter((team) => team.type === 'Pro' && team.id !== player.teamId && canAcceptPlayer(state, team, player))
       .map((team) => ({ team, score: team.prestige + team.rating * 0.12 + (isLocalForTeam(player, team) ? 2 : 0) + stateRandom(state) * 2 }))
@@ -1366,6 +1464,7 @@ function signBestFreeAgent(state, team, localOnly = false) {
   let selectedScore = -Infinity;
   for (const player of availableFreeAgents(state)) {
     const local = isLocalForTeam(player, team);
+    if (!nbaCanAcceptNationality(state, team, player)) continue;
     if (localOnly && !local) continue;
     if (!local && foreignSlots <= 0) continue;
     if (team.type === 'Pro' && player.originRoute === 'NCAA' && ncaaSlots <= 0) continue;
@@ -1497,7 +1596,7 @@ function activateRightsOrSignFromClub(state, team, localOnly = false) {
   const rightsCandidates = state.draftRights
     .filter((right) => right.active && right.teamId === team.id)
     .map((right) => state.players.find((player) => player.id === right.playerId))
-    .filter((player) => player && player.teamType !== 'NBA' && (!localOnly || isLocalForTeam(player, team)))
+    .filter((player) => player && player.teamType !== 'NBA' && (!localOnly || isLocalForTeam(player, team)) && nbaCanAcceptNationality(state, team, player))
     .sort((a, b) => (b.base * 0.55 + b.current * 0.45) - (a.base * 0.55 + a.current * 0.45));
   const candidate = rightsCandidates[0];
   if (candidate && (team.rosterIds.length < team.targetRoster || releaseWeakestFor(state, team, candidate, 1))) {
@@ -1509,7 +1608,7 @@ function activateRightsOrSignFromClub(state, team, localOnly = false) {
   }
   const sourceTypes = team.type === 'NBA' ? ['GLeague', 'Pro'] : ['Pro'];
   const market = state.players
-    .filter((player) => sourceTypes.includes(player.teamType) && player.status === 'Active' && (!localOnly || isLocalForTeam(player, team)))
+    .filter((player) => sourceTypes.includes(player.teamType) && player.status === 'Active' && (!localOnly || isLocalForTeam(player, team)) && nbaCanAcceptNationality(state, team, player))
     .filter((player) => {
       const source = state.teams.find((item) => item.id === player.teamId);
       return source && source.rosterIds.length > Math.max(7, source.localMinimum);
@@ -1700,35 +1799,111 @@ function resetSeason(state) {
   state.players.forEach((player) => { player.stats.games = 0; });
 }
 
+export const OFFSEASON_STAGES = [
+  'Retirements & contracts',
+  'NBA Draft & graduating class',
+  'Trade window',
+  'Free agency & roster building',
+  'Offseason summary & new season',
+];
+
+function captureOffseasonRatings(state) {
+  return Object.fromEntries(state.teams.filter((team)=>!['National'].includes(team.type)).map((team)=>[team.id,{ rating: team.rating, rawRating: team.rawRating }]));
+}
+function recordOffseasonSummary(state) {
+  state.offseasonHistory ??= [];
+  const before = state.offseason?.preRatings ?? {};
+  const yearTransactions = state.transactions.filter((item)=>item.year===state.year);
+  const teams = state.teams.filter((team)=>!['National'].includes(team.type)).map((team)=>{
+    const prior = before[team.id] ?? { rating: team.rating, rawRating: team.rawRating };
+    const arrivals = yearTransactions.filter((item)=>item.toTeamId===team.id).length;
+    const departures = yearTransactions.filter((item)=>item.fromTeamId===team.id).length;
+    return {
+      teamId: team.id, team: team.name, country: team.country, region: team.region, competition: team.competition,
+      before: round(prior.rating,1), after: round(team.rating,1), delta: round(team.rating-prior.rating,1),
+      rawBefore: round(prior.rawRating,1), rawAfter: round(team.rawRating,1), arrivals, departures,
+    };
+  });
+  const nbaTeams = state.teams.filter((team)=>team.type==='NBA');
+  const nbaPlayers = nbaTeams.flatMap((team)=>rosterPlayers(state,team));
+  const international = nbaPlayers.filter(isNBAInternational).length;
+  const nbaTradeRows = yearTransactions.filter((item)=>item.type==='NBA trade').length;
+  const internationalTransfers = yearTransactions.filter((item)=>item.type==='Transfer').length;
+  state.offseasonHistory.unshift({
+    year: state.year+1,
+    teams,
+    transactions: yearTransactions.length,
+    nbaTrades: Math.round(nbaTradeRows/2),
+    internationalTransfers,
+    freeAgentSignings: yearTransactions.filter((item)=>item.type==='Free-agent signing').length,
+    nbaInternationalPlayers: international,
+    nbaInternationalShare: round(international/Math.max(1,nbaPlayers.length)*100,1),
+  });
+}
+
+export function startOffseason(universe) {
+  if (!universe.yearReview || universe.offseason?.active) return universe;
+  const state = universe;
+  state.offseasonHistory ??= [];
+  state.offseason = { active: true, stageIndex: 0, year: state.year, preRatings: captureOffseasonRatings(state), exitClassIds: [] };
+  state.phase = `Offseason · ${OFFSEASON_STAGES[0]}`;
+  return { ...state };
+}
+
+export function advanceOffseasonStage(universe) {
+  if (!universe.yearReview) return universe;
+  const state = universe.offseason?.active ? universe : startOffseason(universe);
+  const stageIndex = state.offseason.stageIndex;
+  if (stageIndex === 0) {
+    state.freeAgents = state.freeAgents ?? [];
+    state.retirements = state.retirements ?? [];
+    state.coachTransactions = state.coachTransactions ?? [];
+    state.freeAgencyHistory = state.freeAgencyHistory ?? [];
+    ageProfessionals(state);
+    processContractExpiries(state);
+    manageCoaches(state);
+    updateOwners(state);
+    state.offseason.stageIndex = 1;
+  } else if (stageIndex === 1) {
+    const exitClass = collegeExitClass(state);
+    state.offseason.exitClassIds = exitClass.map((player)=>player.id);
+    const draft = runDraft(state, exitClass);
+    signDraftPicks(state, draft);
+    const exitIds = processCollegeExits(state, exitClass);
+    ageCollegeExits(state, exitClass);
+    ageRemainingCollege(state, exitIds);
+    createAnnualTalentPlan(state);
+    generateInternationalYouthClass(state);
+    state.offseason.stageIndex = 2;
+  } else if (stageIndex === 2) {
+    runPlayerTransfers(state);
+    state.offseason.stageIndex = 3;
+  } else if (stageIndex === 3) {
+    runPromotionRelegation(state);
+    fillRosters(state);
+    state.offseason.stageIndex = 4;
+  } else {
+    refreshNationalRosters(state);
+    state.teams = recalculateTeamRatings(state.teams, state.players, state.coaches, state.owners);
+    recordOffseasonSummary(state);
+    resetSeason(state);
+    state.year += 1; state.week = 1; state.phase = 'Regular season'; state.yearReview = false; state.finalizedYear = null;
+    state.offseason = null;
+    return { ...state };
+  }
+  state.phase = `Offseason · ${OFFSEASON_STAGES[state.offseason.stageIndex]}`;
+  return { ...state };
+}
+
 export function advanceToNextYear(universe) {
   if (!universe.yearReview) return universe;
-  // Avoid cloning the full Chronicle archive. The UI receives a new root object
-  // at the end, while the engine updates the active save in place.
-  const state = universe;
-  state.freeAgents = state.freeAgents ?? [];
-  state.retirements = state.retirements ?? [];
-  state.coachTransactions = state.coachTransactions ?? [];
-  state.freeAgencyHistory = state.freeAgencyHistory ?? [];
-  ageProfessionals(state);
-  processContractExpiries(state);
-  manageCoaches(state);
-  updateOwners(state);
-  const exitClass = collegeExitClass(state);
-  const draft = runDraft(state, exitClass);
-  signDraftPicks(state, draft);
-  const exitIds = processCollegeExits(state, exitClass);
-  ageCollegeExits(state, exitClass);
-  ageRemainingCollege(state, exitIds);
-  createAnnualTalentPlan(state);
-  generateInternationalYouthClass(state);
-  runPlayerTransfers(state);
-  runPromotionRelegation(state);
-  fillRosters(state);
-  refreshNationalRosters(state);
-  state.teams = recalculateTeamRatings(state.teams, state.players, state.coaches, state.owners);
-  resetSeason(state);
-  state.year += 1; state.week = 1; state.phase = 'Regular season'; state.yearReview = false; state.finalizedYear = null;
-  return { ...state };
+  let state = universe.offseason?.active ? universe : startOffseason(universe);
+  let guard = 0;
+  while (state.offseason?.active && guard < OFFSEASON_STAGES.length + 2) {
+    state = advanceOffseasonStage(state);
+    guard += 1;
+  }
+  return state;
 }
 
 export function competitionRankings(universe, competitionIdValue) {

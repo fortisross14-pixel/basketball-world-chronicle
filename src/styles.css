@@ -358,3 +358,18 @@ tr.clickable:hover { background: #f4ecdf; }
   color: #8a5a16;
   line-height: 1.35;
 }
+
+/* v0.9 offseason, career-stat and market depth */
+.offseason-progress { display: flex; gap: 7px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px; border: 1px solid #d7c8b1; border-radius: 9px; background: #f2eadc; }
+.offseason-progress span { padding: 6px 9px; border-radius: 14px; background: #e5dac8; color: #776953; font-size: .63rem; font-weight: 800; }
+.offseason-progress span.done { background: #dfe9df; color: #3f6648; }
+.offseason-progress span.active { background: var(--dark); color: white; }
+.year-review-banner.offseason { border-left-color: #3267b0; background: #edf3fb; }
+.market-tabs { margin-bottom: 14px; }
+.market-controls { margin-bottom: 12px; }
+.inset-panel { box-shadow: none; background: #fbf7ef; }
+.rank-row .positive { color: #347148; }
+.rank-row .negative { color: #a14a3e; }
+.career-honor-summary { background: #fffaf1; }
+.honor-summary-columns h3 { margin: 0 0 8px; color: var(--dark); font-family: Georgia,serif; font-size: 1rem; }
+@media (max-width: 720px) { .offseason-progress { flex-direction: column; } }
