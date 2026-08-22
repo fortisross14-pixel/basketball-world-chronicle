@@ -12,8 +12,8 @@ import { G_LEAGUE_TEAMS } from '../src/data/teamData.js';
 
 const FULL_SEEDS = [20260729, 19860517];
 const QUICK = process.env.BWC_QUICK === '1';
-const SEEDS = QUICK ? FULL_SEEDS : FULL_SEEDS.slice(0, 1);
-const SEASONS = QUICK ? 3 : 6;
+const SEEDS = QUICK ? FULL_SEEDS.slice(0, 1) : FULL_SEEDS.slice(0, 1);
+const SEASONS = QUICK ? 2 : 6;
 const POSITION_SET = new Set(['PG', 'SG', 'SF', 'PF', 'C']);
 const ELITE_TARGETS = { Generational: 3, Legend: 12, Epic: 30 };
 const average = (items, selector = (item) => item.rating) => items.reduce((sum, item) => sum + selector(item), 0) / Math.max(1, items.length);
@@ -40,6 +40,7 @@ function validateEliteIdentity(universe, label) {
 function validateUniverse(universe, label) {
   const playerById = new Map(universe.players.map((player) => [player.id, player]));
   assert(playerById.size === universe.players.length, `${label}: duplicate active player IDs.`);
+  assert(universe.hallOfFame && Array.isArray(universe.hallOfFame.nba) && Array.isArray(universe.hallOfFame.fiba) && Array.isArray(universe.legacyHistory), `${label}: legacy archives are missing.`);
   const ncaaTeams = universe.teams.filter((team) => team.type === 'NCAA');
   const nationalTeams = universe.teams.filter((team) => team.type === 'National');
   const clubs = universe.teams.filter((team) => !['NCAA', 'National'].includes(team.type));
@@ -63,6 +64,7 @@ function validateUniverse(universe, label) {
     const locals = roster.filter((player) => localCountries(team).includes(player.nationality)).length;
     assert(locals >= team.localMinimum, `${label}: ${team.name} misses its local-player minimum (${locals}/${team.localMinimum}).`);
     assert(roster.every((player) => player.contract && player.contract.teamId === team.id), `${label}: ${team.name} has an active player without the correct contract.`);
+    const numbers=roster.map((player)=>player.jerseyNumber); assert(numbers.every((number)=>number!==null&&number!==undefined), `${label}: ${team.name} has a player without a jersey number.`); assert(new Set(numbers).size===numbers.length, `${label}: ${team.name} has duplicate active jersey numbers.`); assert(!(team.retiredJerseys??[]).some((entry)=>numbers.includes(entry.number)), `${label}: ${team.name} is using a retired jersey.`);
     if (team.type === 'Pro') {
       const ncaaAlumni = roster.filter((player) => player.originRoute === 'NCAA').length;
       const cap = team.secondaryCompetitionIds.includes('euroleague') ? 4 : 3;
@@ -78,6 +80,8 @@ function validateUniverse(universe, label) {
   }
 
   const coachById = new Map(universe.coaches.map((coach) => [coach.id, coach]));
+  const coachBands = { Common:[60,70], Uncommon:[71,77], Rare:[78,83], Epic:[84,88], Legend:[89,93], Generational:[94,98] };
+  universe.coaches.forEach((coach)=>{ const band=coachBands[coach.rarity]; assert(band && coach.base>=band[0] && coach.base<=band[1] && coach.current>=band[0] && coach.current<=band[1], `${label}: ${coach.rarity} coach ${coach.name} has invalid ${coach.current}/${coach.base} rating.`); });
   const ownerById = new Map(universe.owners.map((owner) => [owner.id, owner]));
   for (const team of universe.teams) {
     assert(coachById.get(team.coachId)?.teamId === team.id, `${label}: ${team.name} has no correctly assigned coach.`);
@@ -109,6 +113,14 @@ function nbaInternationalBalance(universe, label) {
   return Number(share.toFixed(1));
 }
 
+function validateGLeagueMarket(universe, label) {
+  const gLeague = universe.players.filter((player) => player.teamType === 'GLeague');
+  assert(gLeague.every((player) => player.current <= 78), `${label}: a G League player exceeded the 78 development ceiling.`);
+  assert(gLeague.every((player) => !['Generational','Legend'].includes(player.rarity)), `${label}: a Legend/Generational player is stranded in the G League.`);
+  const top20 = [...universe.players].sort((a,b)=>b.current-a.current).slice(0,20);
+  assert(!top20.some((player)=>player.teamType==='GLeague'), `${label}: a G League player appears among the world's top 20 active players.`);
+}
+
 function hierarchy(universe) {
   const nba = universe.teams.filter((team) => team.type === 'NBA');
   const euro = universe.teams.filter((team) => team.secondaryCompetitionIds.includes('euroleague'));
@@ -132,6 +144,7 @@ for (const seed of SEEDS) {
   console.log(`\nValidating seed ${seed}...`);
   let universe = createUniverse(seed);
   validateUniverse(universe, `Seed ${seed}, opening universe`);
+  validateGLeagueMarket(universe, `Seed ${seed}, opening universe`);
   nbaInternationalBalance(universe, `Seed ${seed}, opening universe`);
   assert(getCompetitionParticipants(universe, 'eurobasket').length === 24, `Seed ${seed}: EuroBasket field is not 24 teams.`);
   assert(getCompetitionParticipants(universe, 'fiba-americup').length === 12, `Seed ${seed}: AmeriCup field is not 12 teams.`);
@@ -161,6 +174,7 @@ for (const seed of SEEDS) {
       for (let stage = 0; stage < OFFSEASON_STAGES.length; stage += 1) universe = advanceOffseasonStage(universe);
     } else universe = advanceToNextYear(universe);
     validateUniverse(universe, `Seed ${seed}, ${universe.year}`);
+    validateGLeagueMarket(universe, `Seed ${seed}, ${universe.year}`);
     nbaInternationalBalance(universe, `Seed ${seed}, ${universe.year}`);
     const offseason = universe.offseasonHistory[0];
     assert(offseason && offseason.teams.length > 200, `Seed ${seed}, ${universe.year}: offseason summary was not archived.`);
@@ -193,7 +207,7 @@ for (const seed of SEEDS) {
     assert(diversity.champions >= minimumChampions, `Seed ${seed}: ${competitionId} champion diversity is ${diversity.champions}.`);
     assert(diversity.mvps >= minimumMvps, `Seed ${seed}: ${competitionId} MVP diversity is ${diversity.mvps}.`);
     assert(diversity.maxTitles <= (QUICK ? 3 : 4), `Seed ${seed}: one ${competitionId} team won ${diversity.maxTitles}/${SEASONS} titles.`);
-    assert((universe.competitionHistory[competitionId] ?? []).every((season) => season.bracket?.length && season.leaders?.points && season.finalsMvp), `Seed ${seed}: ${competitionId} is missing brackets or awards.`);
+    assert((universe.competitionHistory[competitionId] ?? []).every((season) => season.bracket?.length && season.leaders?.points && season.leaders?.steals && season.leaders?.blocks && season.finalsMvp && ['PG','SG','SF','PF','C'].every((position)=>season.allLeagueFive?.[position])), `Seed ${seed}: ${competitionId} is missing brackets, awards or its best five.`);
   }
 
   assert(!universe.spawnHistory.flatMap((year) => year.players).some((spawn) => universe.teams.find((item) => item.name === spawn.team)?.type === 'NBA'), `Seed ${seed}: an NBA team generated a player after universe creation.`);

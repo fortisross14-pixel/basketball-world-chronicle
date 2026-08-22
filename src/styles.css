@@ -373,3 +373,12 @@ tr.clickable:hover { background: #f4ecdf; }
 .career-honor-summary { background: #fffaf1; }
 .honor-summary-columns h3 { margin: 0 0 8px; color: var(--dark); font-family: Georgia,serif; font-size: 1rem; }
 @media (max-width: 720px) { .offseason-progress { flex-direction: column; } }
+
+/* v0.9.2 legacy layer */
+.retired-jersey-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.retired-jersey-card{border:1px solid var(--line,#d9d2c7);background:var(--paper,#fffdf8);border-radius:12px;padding:14px;text-align:left;display:flex;flex-direction:column;gap:4px;cursor:pointer}
+.retired-jersey-card:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.retired-jersey-card>span{font-size:1.55rem;font-weight:900;letter-spacing:-.03em}
+.retired-jersey-card strong{font-size:.98rem}
+.retired-jersey-card small,.retired-jersey-card p{color:var(--muted,#6d6a63);margin:0}
+.table-subvalue{display:block;color:var(--muted,#6d6a63);font-size:.72rem;margin-top:2px}
