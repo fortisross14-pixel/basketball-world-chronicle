@@ -616,7 +616,37 @@ function initializeSeasonRecords(teams) {
     team.seasonRecords = Object.fromEntries(ids.map((id) => [id, { wins: 0, losses: 0 }]));
   });
 }
-function recalculateTeamRatings(teams, players, coaches = [], owners = []) {
+function weightedRosterMetric(active, scorer) {
+  if (!active.length) return 50;
+  let total = 0;
+  let weightTotal = 0;
+  active.forEach((player, index) => {
+    const weight = index < 5 ? 1 : 0.7;
+    total += scorer(player) * weight;
+    weightTotal += weight;
+  });
+  return total / Math.max(1, weightTotal);
+}
+function basketballStrengthProfile(active, coach, overallRating) {
+  const offenseCoach = coach ? ((coach.offense ?? coach.current ?? 72) - 72) * 0.07 : 0;
+  const defenseCoach = coach ? ((coach.defense ?? coach.current ?? 72) - 72) * 0.08 : 0;
+  const rotationCoach = coach ? ((coach.rotations ?? coach.current ?? 72) - 72) * 0.035 : 0;
+  const perimeter = weightedRosterMetric(active, (player) => player.three * 0.45 + player.midrange * 0.22 + player.passing * 0.33) + offenseCoach;
+  const interior = weightedRosterMetric(active, (player) => player.inside * 0.58 + player.midrange * 0.18 + player.rebounding * 0.24) + offenseCoach * 0.8;
+  const defense = weightedRosterMetric(active, (player) => {
+    const perimeterWeight = ['PG','SG'].includes(player.position) ? 0.72 : player.position === 'SF' ? 0.56 : 0.34;
+    return player.perimeterDefense * perimeterWeight + player.interiorDefense * (1 - perimeterWeight);
+  }) + defenseCoach;
+  const rebounding = weightedRosterMetric(active, (player) => player.rebounding * 0.84 + player.current * 0.16) + rotationCoach;
+  return {
+    overall: round(clamp(overallRating, 45, 99), 1),
+    perimeter: round(clamp(perimeter, 45, 99), 1),
+    interior: round(clamp(interior, 45, 99), 1),
+    defense: round(clamp(defense, 45, 99), 1),
+    rebounding: round(clamp(rebounding, 45, 99), 1),
+  };
+}
+export function recalculateTeamRatings(teams, players, coaches = [], owners = []) {
   const playerById = new Map(players.map((player) => [player.id, player]));
   const teamById = new Map(teams.map((team) => [team.id, team]));
   const coachById = new Map(coaches.map((coach) => [coach.id, coach]));
@@ -660,7 +690,9 @@ function recalculateTeamRatings(teams, players, coaches = [], owners = []) {
     // EuroLeague institutions retain an ecosystem advantage (budget, coaching,
     // continuity and schedule strength) but never receive the NBA's depth boost.
     const euroFloor = team.secondaryCompetitionIds.includes('euroleague') ? 64 + team.prestige * 1.35 : -Infinity;
-    return { ...team, rawRating: round(rawRating,1), continuity: round(continuity * 100, 0), rating: round(clamp(Math.max(calculated, euroFloor),45,99),1) };
+    const rating = round(clamp(Math.max(calculated, euroFloor),45,99),1);
+    const strengthProfile = basketballStrengthProfile(active, coach, rawRating + coachBonus * 0.7 + continuityBonus * 0.5);
+    return { ...team, rawRating: round(rawRating,1), continuity: round(continuity * 100, 0), rating, strengthProfile };
   });
 }
 
@@ -821,15 +853,33 @@ function teamLegacySummary(player, team) {
   const firstFive = honors.filter((honor) => honor.type?.startsWith('Best ')).length;
   return { seasons: new Set(seasons.map((season) => season.year)).size, titles, mvps, finalsMvps, leaders, firstFive };
 }
+function legacyPillars(summary, ncaa = false) {
+  const individualMajor = summary.mvps + summary.finalsMvps;
+  const pillars = [
+    summary.seasons >= (ncaa ? 2 : 8),
+    summary.titles >= (ncaa ? 1 : 2),
+    individualMajor >= 1,
+    summary.firstFive >= (ncaa ? 1 : 3),
+    summary.leaders >= (ncaa ? 1 : 2),
+  ];
+  return {
+    total: pillars.filter(Boolean).length,
+    individual: [individualMajor >= 1, summary.firstFive >= (ncaa ? 1 : 3), summary.leaders >= (ncaa ? 1 : 2)].filter(Boolean).length,
+  };
+}
 function jerseyRetirementScore(player, team) {
   const s = teamLegacySummary(player, team);
   const score = s.seasons * 2 + s.titles * 7 + s.mvps * 16 + s.finalsMvps * 12 + s.leaders * 5 + s.firstFive * 7;
   const ncaa = team.type === 'NCAA';
-  const eliteSignal = s.mvps >= 1 || s.finalsMvps >= 1 || s.firstFive >= (ncaa ? 2 : 3) || s.leaders >= (ncaa ? 2 : 3);
+  const pillars = legacyPillars(s, ncaa);
+  // Retired numbers represent a combination of team identity and individual
+  // greatness. Titles alone never qualify a dynasty passenger; an iconic player
+  // needs multiple independent signals such as longevity, MVPs, Best Five and
+  // statistical leadership. NCAA gets a shorter-career standard.
   const eligible = ncaa
-    ? s.seasons >= 2 && score >= 30 && (s.titles >= 1 || s.mvps >= 1) && eliteSignal
-    : s.seasons >= 5 && score >= 55 && eliteSignal;
-  return { ...s, score, eligible };
+    ? s.seasons >= 2 && score >= 27 && pillars.individual >= 1 && pillars.total >= 2 && (s.titles >= 1 || s.mvps >= 1 || s.firstFive >= 2)
+    : s.seasons >= 7 && score >= 70 && pillars.individual >= 2 && pillars.total >= 3 && (s.mvps + s.finalsMvps >= 1 || s.firstFive >= 4);
+  return { ...s, score, pillars: pillars.total, individualPillars: pillars.individual, eligible };
 }
 function numberForTeamCareer(player, teamId) {
   const rows = (player.jerseyHistory ?? []).filter((entry) => entry.teamId === teamId);
@@ -846,7 +896,7 @@ function retireJerseysForPlayer(state, player) {
     const legacy = jerseyRetirementScore(player, team);
     if (!legacy.eligible) return;
     team.retiredJerseys ??= [];
-    const entry = { year: state.year, teamId: team.id, team: team.name, playerId: player.id, player: player.name, rarity: player.rarity, number, score: legacy.score, seasons: legacy.seasons, titles: legacy.titles, mvps: legacy.mvps, firstFive: legacy.firstFive, leaders: legacy.leaders };
+    const entry = { year: state.year, teamId: team.id, team: team.name, playerId: player.id, player: player.name, rarity: player.rarity, number, score: legacy.score, seasons: legacy.seasons, titles: legacy.titles, mvps: legacy.mvps, finalsMvps: legacy.finalsMvps, firstFive: legacy.firstFive, leaders: legacy.leaders, pillars: legacy.pillars };
     team.retiredJerseys.unshift(entry);
     player.careerEvents ??= [];
     player.careerEvents.push({ year: state.year, type: 'Jersey retired', detail: `${team.name} retired #${number} in honor of ${player.name}.` });
@@ -868,14 +918,33 @@ function legacyCompetitionWeight(competitionIdValue) {
   if (competition.kind === 'league') return 0.7;
   return 0.55;
 }
-function hallScoreFor(player, hall) {
+function hallCareerSummary(player, hall) {
   const nba = hall === 'NBA';
   const histories = (player.history ?? []).filter((season) => nba ? season.competitionId === 'nba' : season.competitionId !== 'nba' && season.competitionId !== 'ncaa-division-i');
   const honors = (player.honors ?? []).filter((honor) => {
     const comp = getCompetition(honor.competitionId);
-    return nba ? honor.competitionId === 'nba' : honor.competitionId !== 'nba' && (comp?.kind !== 'ncaa');
+    return nba ? honor.competitionId === 'nba' : honor.competitionId !== 'nba' && honor.competitionId !== 'ncaa-division-i' && (comp?.kind !== 'ncaa');
   });
-  let score = histories.length * (nba ? 2.5 : 1.7);
+  const titles = honors.filter((honor)=>honor.category==='team'||honor.type==='Team title').length;
+  const mvps = honors.filter((honor)=>honor.type==='MVP').length;
+  const finalsMvps = honors.filter((honor)=>/Finals MVP|Playoff MVP/.test(honor.type)).length;
+  const firstFive = honors.filter((honor)=>honor.type?.startsWith('Best ')).length;
+  const leaders = honors.filter((honor)=>/leader$/.test(honor.type)).length;
+  const majorHonors = honors.filter((honor)=>legacyCompetitionWeight(honor.competitionId)>=1);
+  const majorTitles = majorHonors.filter((honor)=>honor.category==='team'||honor.type==='Team title').length;
+  const majorMvps = majorHonors.filter((honor)=>honor.type==='MVP').length;
+  const majorFinalsMvps = majorHonors.filter((honor)=>/Finals MVP|Playoff MVP/.test(honor.type)).length;
+  const majorFirstFive = majorHonors.filter((honor)=>honor.type?.startsWith('Best ')).length;
+  const majorLeaders = majorHonors.filter((honor)=>/leader$/.test(honor.type)).length;
+  const internationalChampionships = nba ? 0 : (player.internationalHistory ?? []).filter((row)=>row.result==='Champion').length;
+  const internationalFinals = nba ? 0 : (player.internationalHistory ?? []).filter((row)=>['Champion','Runner-up'].includes(row.result)).length;
+  return { seasons: histories.length, titles, mvps, finalsMvps, firstFive, leaders, majorTitles, majorMvps, majorFinalsMvps, majorFirstFive, majorLeaders, internationalChampionships, internationalFinals };
+}
+function hallScoreFor(player, hall) {
+  const nba = hall === 'NBA';
+  const summary = hallCareerSummary(player, hall);
+  const honors = (player.honors ?? []).filter((honor) => nba ? honor.competitionId === 'nba' : honor.competitionId !== 'nba' && honor.competitionId !== 'ncaa-division-i');
+  let score = summary.seasons * (nba ? 2.5 : 1.7);
   honors.forEach((honor) => {
     const weight = legacyCompetitionWeight(honor.competitionId);
     if (honor.category === 'team' || honor.type === 'Team title') score += 7 * weight;
@@ -889,23 +958,50 @@ function hallScoreFor(player, hall) {
   }
   return round(score,1);
 }
+function hallEligibility(summary, hall, score) {
+  const nba = hall === 'NBA';
+  if (nba) {
+    const majorIndividual = summary.mvps + summary.finalsMvps;
+    const pillars = [summary.seasons >= 9, summary.titles >= 2, majorIndividual >= 1, summary.firstFive >= 4, summary.leaders >= 3];
+    const individualPillars = [majorIndividual >= 1, summary.firstFive >= 4, summary.leaders >= 3].filter(Boolean).length;
+    return { eligible: summary.seasons >= 5 && score >= 62 && individualPillars >= 1 && pillars.filter(Boolean).length >= 3, totalPillars: pillars.filter(Boolean).length, individualPillars };
+  }
+  const majorIndividual = summary.majorMvps + summary.majorFinalsMvps;
+  const domesticDominance = Math.max(0, summary.mvps - summary.majorMvps) + Math.max(0, summary.finalsMvps - summary.majorFinalsMvps) + Math.max(0, summary.firstFive - summary.majorFirstFive) * 0.5 + Math.max(0, summary.leaders - summary.majorLeaders) * 0.5;
+  const pillars = [
+    summary.seasons >= 10,
+    summary.majorTitles + summary.internationalChampionships >= 2,
+    majorIndividual >= 1,
+    summary.majorFirstFive >= 2,
+    summary.majorLeaders >= 1,
+    summary.internationalFinals >= 2,
+    domesticDominance >= 10,
+  ];
+  const majorPillars = [summary.majorTitles + summary.internationalChampionships >= 2, majorIndividual >= 1, summary.majorFirstFive >= 2, summary.majorLeaders >= 1, summary.internationalFinals >= 2].filter(Boolean).length;
+  const individualPillars = [majorIndividual >= 1, summary.majorFirstFive >= 2, summary.majorLeaders >= 1, domesticDominance >= 10].filter(Boolean).length;
+  return {
+    eligible: (summary.seasons >= 6 || summary.internationalFinals >= 2) && score >= 72 && pillars.filter(Boolean).length >= 3 && majorPillars >= 2 && individualPillars >= 1,
+    totalPillars: pillars.filter(Boolean).length,
+    individualPillars,
+  };
+}
 function evaluateHallOfFame(state, player) {
   state.hallOfFame ??= { nba: [], fiba: [] };
   const inductions = [];
-  const nbaSeasons = (player.history ?? []).filter((season)=>season.competitionId==='nba').length;
-  const fibaSeasons = (player.history ?? []).filter((season)=>season.competitionId!=='nba'&&season.competitionId!=='ncaa-division-i').length;
+  const nbaSummary = hallCareerSummary(player, 'NBA');
+  const fibaSummary = hallCareerSummary(player, 'FIBA');
   const nbaScore = hallScoreFor(player, 'NBA');
   const fibaScore = hallScoreFor(player, 'FIBA');
-  const nbaElite = (player.honors ?? []).some((honor)=>honor.competitionId==='nba' && (honor.type==='MVP'||honor.type==='Finals MVP'||honor.type?.startsWith('Best ')||/leader$/.test(honor.type)));
-  const fibaElite = (player.honors ?? []).some((honor)=>honor.competitionId!=='nba' && honor.competitionId!=='ncaa-division-i' && (honor.type==='MVP'||/Finals MVP|Playoff MVP/.test(honor.type)||honor.type?.startsWith('Best ')||/leader$/.test(honor.type))) || (player.internationalHistory ?? []).some((row)=>row.result==='Champion');
-  if (nbaSeasons >= 5 && nbaScore >= 58 && nbaElite && !state.hallOfFame.nba.some((entry)=>entry.playerId===player.id)) {
-    const entry = { year: state.year, hall: 'NBA', playerId: player.id, player: player.name, rarity: player.rarity, score: nbaScore, careerYears: player.history?.length ?? 0 };
+  const nbaEligibility = hallEligibility(nbaSummary, 'NBA', nbaScore);
+  const fibaEligibility = hallEligibility(fibaSummary, 'FIBA', fibaScore);
+  if (nbaEligibility.eligible && !state.hallOfFame.nba.some((entry)=>entry.playerId===player.id)) {
+    const entry = { year: state.year, hall: 'NBA', playerId: player.id, player: player.name, rarity: player.rarity, score: nbaScore, careerYears: player.history?.length ?? 0, summary: nbaSummary, pillars: nbaEligibility.totalPillars };
     state.hallOfFame.nba.unshift(entry); inductions.push(entry);
     addPlayerHonor(player, { year: state.year, competitionId: 'nba-hall-of-fame', competition: 'NBA Hall of Fame', type: 'Inducted', category: 'individual' });
     player.careerEvents ??= []; player.careerEvents.push({ year: state.year, type: 'Hall of Fame', detail: 'Inducted into the NBA Hall of Fame.' });
   }
-  if ((fibaSeasons >= 5 || (player.internationalHistory ?? []).length >= 2) && fibaScore >= 55 && fibaElite && !state.hallOfFame.fiba.some((entry)=>entry.playerId===player.id)) {
-    const entry = { year: state.year, hall: 'FIBA', playerId: player.id, player: player.name, rarity: player.rarity, score: fibaScore, careerYears: player.history?.length ?? 0 };
+  if (fibaEligibility.eligible && !state.hallOfFame.fiba.some((entry)=>entry.playerId===player.id)) {
+    const entry = { year: state.year, hall: 'FIBA', playerId: player.id, player: player.name, rarity: player.rarity, score: fibaScore, careerYears: player.history?.length ?? 0, summary: fibaSummary, pillars: fibaEligibility.totalPillars };
     state.hallOfFame.fiba.unshift(entry); inductions.push(entry);
     addPlayerHonor(player, { year: state.year, competitionId: 'fiba-hall-of-fame', competition: 'FIBA Hall of Fame', type: 'Inducted', category: 'individual' });
     player.careerEvents ??= []; player.careerEvents.push({ year: state.year, type: 'Hall of Fame', detail: 'Inducted into the FIBA Hall of Fame.' });
@@ -997,7 +1093,7 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 9.4, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
+    version: 9.5, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {}, hallOfFame: { nba: [], fiba: [] }, legacyHistory: [],
@@ -1327,14 +1423,14 @@ function finalizeSeason(state) {
       activeIds.forEach((id) => {
         const competition = getCompetition(id);
         const record = team.seasonRecords[id] ?? { wins: 0, losses: 0 };
-        team.history.push({ year: state.year, competitionId: id, competition: competition.name, wins: record.wins, losses: record.losses, rating: team.rating, titles: titlesByTeam.get(team.id) ?? [], coachId: team.coachId, ownerId: team.ownerId });
+        team.history.push({ year: state.year, competitionId: id, competition: competition.name, wins: record.wins, losses: record.losses, rating: team.rating, strengthProfile: { ...(team.strengthProfile ?? {}) }, titles: titlesByTeam.get(team.id) ?? [], coachId: team.coachId, ownerId: team.ownerId });
       });
       return;
     }
     const record = team.seasonRecords[team.competitionId] ?? { wins: team.wins, losses: team.losses };
     team.history.push({
       year: state.year, competitionId: team.competitionId, competition: team.competition,
-      wins: record.wins, losses: record.losses, rating: team.rating,
+      wins: record.wins, losses: record.losses, rating: team.rating, strengthProfile: { ...(team.strengthProfile ?? {}) },
       titles: titlesByTeam.get(team.id) ?? [], coachId: team.coachId, ownerId: team.ownerId,
     });
   });
@@ -1501,11 +1597,12 @@ function processContractExpiries(state) {
     const rank = Math.max(0, roster.findIndex((item)=>item.id===player.id));
     const topHalf = rank < Math.ceil(roster.length / 2);
     const protectedAsset = team.type === 'NBA' && isProtectedNBAAsset(state, player);
+    const protectedCore = isProtectedTeamCore(state, team, player);
     const remaining = offseasonTurnoverRemaining(state, team);
     const continuityBias = topHalf ? 0.94 : 0.82;
     const qualityBias = clamp((player.current - 72) * 0.008, -0.08, 0.12);
     const stabilityBias = clamp((owner?.stability ?? 0) * 0.008, -0.03, 0.09);
-    const reSignChance = protectedAsset || remaining <= 0 ? 0.995 : clamp(continuityBias + qualityBias + stabilityBias, 0.72, 0.985);
+    const reSignChance = protectedAsset || protectedCore || remaining <= 0 ? 0.995 : clamp(continuityBias + qualityBias + stabilityBias, 0.72, 0.985);
     if (stateRandom(state) < reSignChance) {
       assignContract(player, team, nextYear, () => stateRandom(state));
       player.careerEvents.push({ year: state.year, type: 'Contract extension', detail: `Re-signed with ${team.name} through ${player.contract.endYear}.` });
@@ -1631,7 +1728,7 @@ function signDraftPicks(state, draft) {
     let joined = 0;
     picks.forEach((pick) => {
       const player = state.players.find((item) => item.id === pick.playerId);
-      if (!player || joined >= 2) return;
+      if (!player || joined >= 2 || draft.signed >= 35) return;
       if (!nbaCanAcceptNationality(state, team, player) && !openNBAInternationalSlotForElite(state, team, player)) return;
       const highValueProspect = ['Generational','Legend'].includes(player.rarity) || (pick.pick <= 10 && player.base >= 86) || (pick.round === 1 && player.base >= 84);
       // In the 10-man abstraction, a first-round pick is normally one of the one or
@@ -1743,8 +1840,8 @@ function runNBATrades(state) {
     const eligibleTeamBs = selectionPool.filter((team) => team.id !== teamA?.id);
     const teamB = weightedChoice(eligibleTeamBs, eligibleTeamBs.map(tradeWeight), () => stateRandom(state));
     if (!teamA || !teamB) continue;
-    const eligibleA = rosterPlayers(state, teamA).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational' && !isProtectedNBAAsset(state, player));
-    const eligibleB = rosterPlayers(state, teamB).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational' && !isProtectedNBAAsset(state, player));
+    const eligibleA = rosterPlayers(state, teamA).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational' && !isProtectedNBAAsset(state, player) && !isProtectedTeamCore(state, teamA, player));
+    const eligibleB = rosterPlayers(state, teamB).filter((player) => player.contract && player.draft?.year !== state.year && player.rarity !== 'Generational' && !isProtectedNBAAsset(state, player) && !isProtectedTeamCore(state, teamB, player));
     if (!eligibleA.length || !eligibleB.length) continue;
 
     // Most trades involve rotation pieces. Core stars move only occasionally and
@@ -1805,7 +1902,7 @@ function runPlayerTransfers(state) {
   const proMovers = state.players.filter((player) => {
     if (player.teamType !== 'Pro' || player.status !== 'Active' || player.age < 22) return false;
     const source = state.teams.find((team)=>team.id===player.teamId);
-    if (!source || offseasonTurnoverRemaining(state, source) <= 0) return false;
+    if (!source || offseasonTurnoverRemaining(state, source) <= 0 || isProtectedTeamCore(state, source, player)) return false;
     return stateRandom(state) < 0.012;
   }).slice(0, 45);
   proMovers.forEach((player) => {
@@ -2082,6 +2179,22 @@ function franchiseValue(state, player) {
   const rarity = player.rarity === 'Generational' ? 18 : player.rarity === 'Legend' ? 13 : player.rarity === 'Epic' ? 6 : player.rarity === 'Rare' ? 2 : 0;
   return player.current + agePotential + rarity + recentDraftCredit(state, player) + recentHonorCredit(player, state);
 }
+function isProtectedTeamCore(state, team, player) {
+  if (!team || !player || !['NBA','Pro'].includes(team.type)) return false;
+  const roster = rosterPlayers(state, team).sort((a,b)=>franchiseValue(state,b)-franchiseValue(state,a));
+  const rank = roster.findIndex((item)=>item.id===player.id);
+  if (rank < 0) return false;
+  const winPct = team.wins / Math.max(1, team.wins + team.losses);
+  const champion = (team.honors ?? []).some((honor)=>Number(honor.year)===Number(state.year));
+  const contender = champion || winPct >= 0.58;
+  if (!contender) return false;
+  // Successful basketball teams preserve their core. A champion protects its top
+  // three franchise assets; other contenders protect the top two, with a third
+  // elite piece protected when clearly star-level. Blockbuster trades can still
+  // happen on rebuilding clubs, but good teams do not casually dismantle themselves.
+  if (rank < (champion ? 3 : 2)) return true;
+  return rank === 2 && (['Generational','Legend','Epic'].includes(player.rarity) || player.current >= 85);
+}
 function isProtectedNBAAsset(state, player) {
   if (!player || player.teamType !== 'NBA') return false;
   const draftAge = player.draft?.year != null ? state.year - Number(player.draft.year) : 99;
@@ -2095,7 +2208,7 @@ function isProtectedNBAAsset(state, player) {
 }
 function nbaCutCandidates(state, team, incoming = null) {
   const roster = rosterPlayers(state, team);
-  return roster.filter((player) => !isProtectedNBAAsset(state, player) && (!incoming || isLocalForTeam(incoming, team) || !isLocalForTeam(player, team)))
+  return roster.filter((player) => !isProtectedNBAAsset(state, player) && !isProtectedTeamCore(state, team, player) && (!incoming || isLocalForTeam(incoming, team) || !isLocalForTeam(player, team)))
     .sort((a,b)=>franchiseValue(state,a)-franchiseValue(state,b));
 }
 function canProvisionallyAddNBA(state, team, incoming, threshold = 2) {
@@ -2420,7 +2533,7 @@ export const OFFSEASON_STAGES = [
 ];
 
 function captureOffseasonRatings(state) {
-  return Object.fromEntries(state.teams.filter((team)=>!['National'].includes(team.type)).map((team)=>[team.id,{ rating: team.rating, rawRating: team.rawRating }]));
+  return Object.fromEntries(state.teams.filter((team)=>!['National'].includes(team.type)).map((team)=>[team.id,{ rating: team.rating, rawRating: team.rawRating, strengthProfile: { ...(team.strengthProfile ?? {}) } }]));
 }
 function recordOffseasonSummary(state) {
   state.offseasonHistory ??= [];
@@ -2432,7 +2545,7 @@ function recordOffseasonSummary(state) {
   const playerById = new Map(allPlayers.map((player)=>[player.id,player]));
   const coachById = new Map([...state.coaches, ...state.retiredCoaches].map((coach)=>[coach.id,coach]));
   const teams = state.teams.filter((team)=>!['National'].includes(team.type)).map((team)=>{
-    const prior = before[team.id] ?? { rating: team.rating, rawRating: team.rawRating };
+    const prior = before[team.id] ?? { rating: team.rating, rawRating: team.rawRating, strengthProfile: { ...(team.strengthProfile ?? {}) } };
     const originalIds = rosterSnapshots[team.id] ?? [];
     const currentIds = team.rosterIds;
     const currentSet = new Set(currentIds);
@@ -2452,6 +2565,7 @@ function recordOffseasonSummary(state) {
       competitionIds: [team.competitionId, ...(team.secondaryCompetitionIds ?? [])],
       before: round(prior.rating,1), after: round(team.rating,1), delta: round(team.rating-prior.rating,1),
       rawBefore: round(prior.rawRating,1), rawAfter: round(team.rawRating,1),
+      profileBefore: { ...(prior.strengthProfile ?? {}) }, profileAfter: { ...(team.strengthProfile ?? {}) },
       arrivals: inIds.length, departures: outIds.length, turnoverTarget: offseasonTurnoverTarget(state,team),
       playersIn: inIds.map(toRow), playersOut: outIds.map(toRow),
       coachIn: coachIn ? { coachId:coachIn.id, coach:coachIn.name, rarity:coachIn.rarity, base:coachIn.base, current:coachIn.current } : null,

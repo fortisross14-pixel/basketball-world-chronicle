@@ -64,6 +64,7 @@ function validateUniverse(universe, label) {
     const locals = roster.filter((player) => localCountries(team).includes(player.nationality)).length;
     assert(locals >= team.localMinimum, `${label}: ${team.name} misses its local-player minimum (${locals}/${team.localMinimum}).`);
     assert(roster.every((player) => player.contract && player.contract.teamId === team.id), `${label}: ${team.name} has an active player without the correct contract.`);
+    const profile=team.strengthProfile; assert(profile && ['overall','perimeter','interior','defense','rebounding'].every((key)=>Number.isFinite(profile[key])&&profile[key]>=45&&profile[key]<=99), `${label}: ${team.name} is missing a valid five-part basketball strength profile.`);
     const numbers=roster.map((player)=>player.jerseyNumber); assert(numbers.every((number)=>number!==null&&number!==undefined), `${label}: ${team.name} has a player without a jersey number.`); assert(new Set(numbers).size===numbers.length, `${label}: ${team.name} has duplicate active jersey numbers.`); assert(!(team.retiredJerseys??[]).some((entry)=>numbers.includes(entry.number)), `${label}: ${team.name} is using a retired jersey.`);
     if (team.type === 'Pro') {
       const ncaaAlumni = roster.filter((player) => player.originRoute === 'NCAA').length;
@@ -179,6 +180,7 @@ for (const seed of SEEDS) {
     const offseason = universe.offseasonHistory[0];
     assert(offseason && offseason.teams.length > 200, `Seed ${seed}, ${universe.year}: offseason summary was not archived.`);
     assert(offseason.teams.some((team)=>team.delta>0) && offseason.teams.some((team)=>team.delta<0), `Seed ${seed}, ${universe.year}: offseason summary did not produce both improvers and decliners.`);
+    assert(offseason.teams.every((team)=>team.profileAfter && ['overall','perimeter','interior','defense','rebounding'].every((key)=>Number.isFinite(team.profileAfter[key]))), `Seed ${seed}, ${universe.year}: offseason summary is missing team-area profiles.`);
     assert(offseason.nbaTrades >= 3 && offseason.nbaTrades <= 12, `Seed ${seed}, ${universe.year}: NBA trade volume is ${offseason.nbaTrades}.`);
     const nbaMovement=offseason.teams.filter((team)=>team.competition==='NBA').map((team)=>team.departures);
     const avgMovement=nbaMovement.reduce((sum,value)=>sum+value,0)/Math.max(1,nbaMovement.length);
