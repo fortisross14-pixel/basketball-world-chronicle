@@ -4,6 +4,9 @@ import {
   startOffseason,
   OFFSEASON_STAGES,
   createUniverse,
+  configureSeasonPresentation,
+  skipCurrentShowcaseGame,
+  advanceShowcaseGame,
   getCompetitionParticipants,
   simulateWeeks,
 } from '../src/game/universe.js';
@@ -167,6 +170,7 @@ for (const seed of SEEDS) {
 
   for (let seasonIndex = 0; seasonIndex < SEASONS; seasonIndex += 1) {
     process.stdout.write(`  Season ${seasonIndex + 1}/${SEASONS}: `);
+    universe = configureSeasonPresentation(universe, { nba:'None', ncaa:'None', euroleague:'None', international:'None' });
     universe = simulateWeeks(universe, 50);
     assert(universe.yearReview && universe.finalizedYear === universe.year, `Seed ${seed}, ${universe.year}: year review did not finalize.`);
     if (seasonIndex === 0) {
@@ -233,6 +237,20 @@ for (const seed of SEEDS) {
   universe = null;
   if (global.gc) global.gc();
 }
+
+
+console.log('\nValidating postseason presentation flow...');
+let showcaseUniverse = createUniverse(424242);
+showcaseUniverse = configureSeasonPresentation(showcaseUniverse, { nba:'Final', ncaa:'Semifinals', euroleague:'Semifinals', international:'Final' });
+showcaseUniverse = simulateWeeks(showcaseUniverse, 50);
+assert(showcaseUniverse.showcase?.active && showcaseUniverse.showcase.games.length >= 8, 'Showcase queue was not created.');
+assert(showcaseUniverse.showcase.games.some((game)=>game.competitionId==='nba' && game.round==='NBA Finals'), 'NBA Finals showcase games are missing.');
+assert(showcaseUniverse.showcase.games.some((game)=>game.competitionId==='ncaa-tournament' && game.round==='Final Four'), 'March Madness Final Four showcase games are missing.');
+assert(showcaseUniverse.showcase.games.every((game)=>game.timeline.length>0 && game.boxA.length>=5 && game.boxB.length>=5 && game.mvp?.playerId), 'Showcase game detail is incomplete.');
+let showcaseGuard=0;
+while(showcaseUniverse.showcase?.active && showcaseGuard<100){ showcaseUniverse=skipCurrentShowcaseGame(showcaseUniverse); showcaseUniverse=advanceShowcaseGame(showcaseUniverse); showcaseGuard+=1; }
+assert(showcaseUniverse.yearReview && showcaseUniverse.showcaseHistory?.[0]?.games?.length>=8, 'Showcase flow did not return to Year Review.');
+console.log(`  passed · ${showcaseGuard} showcase games archived`);
 
 console.log(`\n${QUICK ? 'Quick' : 'Full deterministic'} validation passed: ${SEEDS.length} seeds × ${SEASONS} seasons.`);
 for (const summary of summaries) console.log(`Seed ${summary.seed} → ${summary.finalYear}: NBA ${summary.finalHierarchy.nbaAverage}, EuroLeague ${summary.finalHierarchy.euroAverage}, NCAA ${summary.finalHierarchy.ncaaAverage}; NBA champions ${summary.nba.champions}, MVPs ${summary.nba.mvps}; EuroLeague champions ${summary.euroleague.champions}, MVPs ${summary.euroleague.mvps}; latest draft ${summary.draft.ncaaPicks}/${summary.draft.internationalPicks}, ${summary.draft.signed} immediate NBA signings.`);

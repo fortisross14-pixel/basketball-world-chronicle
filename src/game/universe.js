@@ -1093,11 +1093,13 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 9.5, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Regular season', yearReview: false,
+    version: 9.6, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {}, hallOfFame: { nba: [], fiba: [] }, legacyHistory: [],
     usedRealPlayerNames, followedPlayerIds: [], eliteRouteBalance: { NCAA: 0, International: 0 },
+    presentation: { confirmedYear: null, config: { nba: 'Final', ncaa: 'Semifinals', euroleague: 'Semifinals', international: 'Final' } },
+    showcase: null, showcaseHistory: [],
     nextPlayerId: playerId, nextCoachId: coachId, nextOwnerId: ownerId,
   };
 }
@@ -1143,8 +1145,223 @@ function currentTopTeams(state) {
   });
 }
 
+
+export const PRESENTATION_LEVELS = ['None','Final','Semifinals'];
+export const DEFAULT_PRESENTATION_CONFIG = { nba: 'Final', ncaa: 'Semifinals', euroleague: 'Semifinals', international: 'Final' };
+
+function ensurePresentationState(state) {
+  state.presentation ??= { confirmedYear: null, config: { ...DEFAULT_PRESENTATION_CONFIG } };
+  state.presentation.config = { ...DEFAULT_PRESENTATION_CONFIG, ...(state.presentation.config ?? {}) };
+  state.showcaseHistory ??= [];
+  return state.presentation;
+}
+
+export function configureSeasonPresentation(universe, config) {
+  const state = universe;
+  const presentation = ensurePresentationState(state);
+  presentation.config = Object.fromEntries(Object.entries({ ...DEFAULT_PRESENTATION_CONFIG, ...(config ?? {}) }).map(([key,value]) => [key, PRESENTATION_LEVELS.includes(value) ? value : 'None']));
+  presentation.confirmedYear = state.year;
+  if (!state.yearReview && !state.showcase?.active) state.phase = 'Regular season';
+  return { ...state };
+}
+
+function showcaseBucket(competition) {
+  if (competition.id === 'nba') return 'nba';
+  if (competition.id === 'ncaa-tournament') return 'ncaa';
+  if (competition.id === 'euroleague') return 'euroleague';
+  if (competition.kind === 'international') return 'international';
+  return null;
+}
+
+function desiredShowcaseRounds(competition, level) {
+  if (level === 'None') return [];
+  if (competition.id === 'nba') return level === 'Semifinals' ? ['Conference finals','NBA Finals'] : ['NBA Finals'];
+  if (competition.id === 'ncaa-tournament') return level === 'Semifinals' ? ['Final Four','National Championship'] : ['National Championship'];
+  return level === 'Semifinals' ? ['Semifinals','Final'] : ['Final'];
+}
+
+function allocateIntegerTotal(total, weights, random) {
+  if (!weights.length) return [];
+  const clean = weights.map((value) => Math.max(0.01, Number(value) || 0.01));
+  const sum = clean.reduce((a,b)=>a+b,0);
+  const raw = clean.map((value)=>total*value/sum);
+  const values = raw.map((value)=>Math.floor(value));
+  let remaining = total - values.reduce((a,b)=>a+b,0);
+  const order = raw.map((value,index)=>({ index, fraction:value-Math.floor(value), jitter:random()*0.01 })).sort((a,b)=>b.fraction-a.fraction || b.jitter-a.jitter);
+  for (let i=0;i<remaining;i+=1) values[order[i%order.length].index]+=1;
+  return values;
+}
+
+function periodStructure(competition) {
+  if (competition.id === 'nba') return { count:4, minutes:12, labels:['Q1','Q2','Q3','Q4'] };
+  if (competition.id === 'ncaa-tournament') return { count:2, minutes:20, labels:['1st half','2nd half'] };
+  return { count:4, minutes:10, labels:['Q1','Q2','Q3','Q4'] };
+}
+
+function splitPeriodScore(total, count, random) {
+  const weights = Array.from({length:count},()=>0.82+random()*0.36);
+  return allocateIntegerTotal(total, weights, random);
+}
+
+function minuteIncrements(periodTotal, minutes, random) {
+  const values = Array(minutes).fill(0);
+  let remaining = periodTotal;
+  while (remaining > 0) {
+    const bundle = remaining >= 3 && random() < 0.28 ? 3 : remaining >= 2 && random() < 0.82 ? 2 : 1;
+    values[Math.floor(random()*minutes)] += bundle;
+    remaining -= bundle;
+  }
+  return values;
+}
+
+function detailedScoreForGame(state, competition, teamA, teamB, forcedWinnerId, storedScoreA = null, storedScoreB = null) {
+  const random = () => stateRandom(state);
+  if (competition.id !== 'nba' && Number(storedScoreA) > 20 && Number(storedScoreB) > 20) return { scoreA:storedScoreA, scoreB:storedScoreB };
+  const nba = competition.id === 'nba';
+  const ncaa = competition.id === 'ncaa-tournament';
+  const base = nba ? 111 : ncaa ? 75 : 82;
+  const paceA = base + (teamA.rating - (nba?89:ncaa?60:78))*0.62 + (random()-0.5)*10;
+  const paceB = base + (teamB.rating - (nba?89:ncaa?60:78))*0.62 + (random()-0.5)*10;
+  let scoreA = Math.round(clamp(paceA, nba?88:58, nba?139:112));
+  let scoreB = Math.round(clamp(paceB, nba?88:58, nba?139:112));
+  const winnerA = forcedWinnerId === teamA.id;
+  if (winnerA && scoreA <= scoreB) scoreA = scoreB + integer(2,12,random);
+  if (!winnerA && scoreB <= scoreA) scoreB = scoreA + integer(2,12,random);
+  if (scoreA === scoreB) winnerA ? scoreA++ : scoreB++;
+  return { scoreA, scoreB };
+}
+
+function gameBoxForTeam(state, team, finalScore, competition) {
+  const random = () => stateRandom(state);
+  const players = team.rosterIds.map((id)=>state.players.find((player)=>player.id===id)).filter(Boolean);
+  if (!players.length) return [];
+  const scoringWeights = players.map((player)=>Math.max(1,player.stats?.ppg??5)*(0.72+random()*0.58)*(0.7+player.current/180));
+  const points = allocateIntegerTotal(finalScore, scoringWeights, random);
+  const reboundTarget = integer(competition.id==='nba'?38:30, competition.id==='nba'?55:47, random);
+  const offensiveTarget = Math.min(reboundTarget-12, integer(7,14,random));
+  const defensiveTarget = reboundTarget-offensiveTarget;
+  const rebWeights = players.map((player)=>Math.max(0.4,player.stats?.rpg??2)*(player.position==='C'?1.35:player.position==='PF'?1.18:1));
+  const orWeights = players.map((player,index)=>rebWeights[index]*(player.position==='C'?1.35:player.position==='PF'?1.2:0.72));
+  const offensive = allocateIntegerTotal(offensiveTarget,orWeights,random);
+  const defensive = allocateIntegerTotal(defensiveTarget,rebWeights,random);
+  const assistTarget = Math.min(38,Math.max(12,Math.round(finalScore*(0.19+random()*0.09))));
+  const assists = allocateIntegerTotal(assistTarget,players.map((player)=>Math.max(0.4,player.stats?.apg??1)*(player.position==='PG'?1.28:1)),random);
+  const steals = allocateIntegerTotal(integer(4,11,random),players.map((player)=>Math.max(0.3,player.stats?.spg??0.5)),random);
+  const blocks = allocateIntegerTotal(integer(2,9,random),players.map((player)=>Math.max(0.2,player.stats?.bpg??0.3)*(player.position==='C'?1.45:1)),random);
+  return players.map((player,index)=>({
+    playerId:player.id, player:player.name, position:player.position, rarity:player.rarity, current:player.current,
+    points:points[index], orpg:offensive[index], drpg:defensive[index], rebounds:offensive[index]+defensive[index],
+    assists:assists[index], steals:steals[index], blocks:blocks[index],
+    gameScore:round(points[index] + (offensive[index]+defensive[index])*1.15 + assists[index]*1.45 + steals[index]*2 + blocks[index]*2 + random()*6,1),
+  })).sort((a,b)=>b.points-a.points || b.gameScore-a.gameScore);
+}
+
+function buildDetailedGame(state, competition, teamA, teamB, forcedWinnerId, storedScoreA = null, storedScoreB = null, meta = {}) {
+  const random = () => stateRandom(state);
+  const { scoreA, scoreB } = detailedScoreForGame(state,competition,teamA,teamB,forcedWinnerId,storedScoreA,storedScoreB);
+  const structure = periodStructure(competition);
+  const periodA = splitPeriodScore(scoreA,structure.count,random);
+  const periodB = splitPeriodScore(scoreB,structure.count,random);
+  const timeline = [];
+  let liveA=0, liveB=0;
+  for (let period=0;period<structure.count;period+=1) {
+    const incA=minuteIncrements(periodA[period],structure.minutes,random);
+    const incB=minuteIncrements(periodB[period],structure.minutes,random);
+    for (let minute=0;minute<structure.minutes;minute+=1) {
+      liveA+=incA[minute]; liveB+=incB[minute];
+      timeline.push({ period:period+1, periodLabel:structure.labels[period], minute:minute+1, remaining:structure.minutes-minute-1, scoreA:liveA, scoreB:liveB, deltaA:incA[minute], deltaB:incB[minute] });
+    }
+  }
+  const boxA=gameBoxForTeam(state,teamA,scoreA,competition);
+  const boxB=gameBoxForTeam(state,teamB,scoreB,competition);
+  const winnerId=scoreA>scoreB?teamA.id:teamB.id;
+  const candidates=[...boxA.map((row)=>({...row,teamId:teamA.id,team:teamA.name,winner:teamA.id===winnerId})),...boxB.map((row)=>({...row,teamId:teamB.id,team:teamB.name,winner:teamB.id===winnerId}))];
+  candidates.forEach((row)=>{ if(row.winner) row.gameScore+=3; });
+  const mvp=[...candidates].sort((a,b)=>b.gameScore-a.gameScore)[0];
+  return {
+    id:`${state.year}-${competition.id}-${meta.roundName??'round'}-${meta.seriesIndex??0}-${meta.gameNumber??1}-${teamA.id}-${teamB.id}`,
+    year:state.year, competitionId:competition.id, competition:competition.name, round:meta.roundName??'Final', seriesIndex:meta.seriesIndex??0, gameNumber:meta.gameNumber??1,
+    teamAId:teamA.id, teamA:teamA.name, teamBId:teamB.id, teamB:teamB.name, winnerId, scoreA, scoreB,
+    periodLabels:structure.labels, periodMinutes:structure.minutes, periodScoresA:periodA, periodScoresB:periodB, timeline, boxA, boxB,
+    mvp:{ playerId:mvp?.playerId, player:mvp?.player, teamId:mvp?.teamId, team:mvp?.team, points:mvp?.points??0, rebounds:mvp?.rebounds??0, orpg:mvp?.orpg??0, drpg:mvp?.drpg??0, assists:mvp?.assists??0, steals:mvp?.steals??0, blocks:mvp?.blocks??0 },
+    completedTicks:0, status:'Pending',
+  };
+}
+
+function seriesDetailedGames(state, competition, match, roundName, seriesIndex) {
+  const teamA=state.teams.find((team)=>team.id===match.teamAId); const teamB=state.teams.find((team)=>team.id===match.teamBId);
+  if(!teamA||!teamB) return [];
+  const winsA=Number(match.scoreA)||0, winsB=Number(match.scoreB)||0;
+  const winnerId=match.winnerId;
+  const winnerWins=winnerId===teamA.id?winsA:winsB;
+  const loserWins=winnerId===teamA.id?winsB:winsA;
+  const prior=[];
+  for(let i=0;i<Math.max(0,winnerWins-1);i+=1) prior.push(winnerId);
+  const loserId=winnerId===teamA.id?teamB.id:teamA.id;
+  for(let i=0;i<loserWins;i+=1) prior.push(loserId);
+  for(let i=prior.length-1;i>0;i-=1){const j=Math.floor(stateRandom(state)*(i+1));[prior[i],prior[j]]=[prior[j],prior[i]];}
+  prior.push(winnerId);
+  return prior.map((gameWinnerId,index)=>buildDetailedGame(state,competition,teamA,teamB,gameWinnerId,null,null,{roundName,seriesIndex,gameNumber:index+1}));
+}
+
+function prepareSeasonShowcase(state) {
+  const presentation=ensurePresentationState(state);
+  const queue=[];
+  const order={ncaa:1,euroleague:2,nba:3,international:4};
+  COMPETITIONS.forEach((competition)=>{
+    const bucket=showcaseBucket(competition);
+    if(!bucket || !isCompetitionActive(competition,state.year)) return;
+    const level=presentation.config[bucket]??'None';
+    if(level==='None') return;
+    const season=(state.competitionHistory[competition.id]??[]).find((item)=>item.year===state.year);
+    if(!season?.bracket?.length) return;
+    const desired=new Set(desiredShowcaseRounds(competition,level));
+    season.bracket.forEach((round,roundIndex)=>{
+      if(!desired.has(round.name)) return;
+      round.matches.forEach((match,seriesIndex)=>{
+        if(competition.id==='nba') queue.push(...seriesDetailedGames(state,competition,match,round.name,seriesIndex));
+        else {
+          const teamA=state.teams.find((team)=>team.id===match.teamAId); const teamB=state.teams.find((team)=>team.id===match.teamBId);
+          if(teamA&&teamB) queue.push(buildDetailedGame(state,competition,teamA,teamB,match.winnerId,match.scoreA,match.scoreB,{roundName:round.name,seriesIndex,gameNumber:1}));
+        }
+      });
+    });
+  });
+  queue.sort((a,b)=>{
+    const ca=getCompetition(a.competitionId), cb=getCompetition(b.competitionId);
+    const oa=order[showcaseBucket(ca)]??9, ob=order[showcaseBucket(cb)]??9;
+    if(oa!==ob) return oa-ob;
+    const ra=(ca.id==='nba'?['First round','Conference semifinals','Conference finals','NBA Finals']:ca.id==='ncaa-tournament'?['Round of 32','Sweet 16','Elite Eight','Final Four','National Championship']:['Round of 16','Quarterfinals','Semifinals','Final']).indexOf(a.round);
+    const rb=(cb.id==='nba'?['First round','Conference semifinals','Conference finals','NBA Finals']:cb.id==='ncaa-tournament'?['Round of 32','Sweet 16','Elite Eight','Final Four','National Championship']:['Round of 16','Quarterfinals','Semifinals','Final']).indexOf(b.round);
+    return ra-rb || a.seriesIndex-b.seriesIndex || a.gameNumber-b.gameNumber;
+  });
+  if(queue.length){state.showcase={active:true,year:state.year,currentIndex:0,games:queue};state.phase='Postseason showcase';state.yearReview=false;}
+  else {state.showcase=null;state.phase='Year review';state.yearReview=true;}
+}
+
+export function checkpointShowcaseGame(universe, completedTicks) {
+  const state=universe; const game=state.showcase?.games?.[state.showcase.currentIndex]; if(!game) return universe;
+  game.completedTicks=clamp(Number(completedTicks)||0,0,game.timeline.length);
+  game.status=game.completedTicks>=game.timeline.length?'Final':'In progress';
+  return { ...state };
+}
+export function skipCurrentShowcaseGame(universe) {
+  const state=universe; const game=state.showcase?.games?.[state.showcase.currentIndex]; if(!game) return universe;
+  game.completedTicks=game.timeline.length; game.status='Final'; return { ...state };
+}
+export function advanceShowcaseGame(universe) {
+  const state=universe; const showcase=state.showcase; if(!showcase?.active) return universe;
+  const game=showcase.games[showcase.currentIndex]; if(game && game.completedTicks<game.timeline.length) return universe;
+  if(showcase.currentIndex<showcase.games.length-1){showcase.currentIndex+=1;return { ...state };}
+  state.showcaseHistory ??=[];
+  state.showcaseHistory.unshift({year:state.year,games:showcase.games});
+  state.showcase={...showcase,active:false}; state.yearReview=true; state.phase='Year review'; return { ...state };
+}
+
 export function simulateWeeks(universe, numberOfWeeks) {
-  if (universe.yearReview) return universe;
+  if (universe.yearReview || universe.showcase?.active) return universe;
+  const presentation = ensurePresentationState(universe);
+  if (presentation.confirmedYear !== universe.year) return universe;
   // The universe can exceed tens of megabytes after several seasons. Mutate the
   // active engine state and return a fresh root object instead of cloning the
   // complete historical archive before every click. IndexedDB performs its own
@@ -1172,8 +1389,7 @@ export function simulateWeeks(universe, numberOfWeeks) {
   if (state.week > 40) {
     state.week = 40;
     finalizeSeason(state);
-    state.phase = 'Year review';
-    state.yearReview = true;
+    prepareSeasonShowcase(state);
   }
   return { ...state };
 }
@@ -2648,7 +2864,9 @@ export function advanceOffseasonStage(universe) {
     state.teams = recalculateTeamRatings(state.teams, state.players, state.coaches, state.owners);
     recordOffseasonSummary(state);
     resetSeason(state);
-    state.year += 1; state.week = 1; state.phase = 'Regular season'; state.yearReview = false; state.finalizedYear = null;
+    state.year += 1; state.week = 1; state.phase = 'Season setup'; state.yearReview = false; state.finalizedYear = null;
+    ensurePresentationState(state).confirmedYear = null;
+    state.showcase = null;
     state.offseason = null;
     return { ...state };
   }

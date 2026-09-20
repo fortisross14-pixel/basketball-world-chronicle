@@ -2,16 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   advanceToNextYear,
   advanceOffseasonStage,
+  advanceShowcaseGame,
+  checkpointShowcaseGame,
+  configureSeasonPresentation,
   startOffseason,
   OFFSEASON_STAGES,
   competitionRankings,
   COMPETITIONS,
   createUniverse,
+  DEFAULT_PRESENTATION_CONFIG,
   getCompetition,
   getCompetitionParticipants,
   POSITION_ORDER,
   recalculateTeamRatings,
   repairMarketBalance,
+  skipCurrentShowcaseGame,
   simulateWeeks,
 } from './game/universe.js';
 import { deleteSaveSlot, listSaveSlots, loadSaveSlot, writeSaveSlot } from './game/saveDb.js';
@@ -105,6 +110,10 @@ function goToRoute(path, replace = false) {
 function normalizeUniverseForUi(universe) {
   if (!universe) return universe;
   universe.version ??= 7;
+  universe.presentation ??= { confirmedYear: null, config: { ...DEFAULT_PRESENTATION_CONFIG } };
+  universe.presentation.config = { ...DEFAULT_PRESENTATION_CONFIG, ...(universe.presentation.config ?? {}) };
+  universe.showcaseHistory ??= [];
+  universe.showcase ??= null;
   if (Number(universe.version) >= 9 && Number(universe.version) < 9.3) universe = repairMarketBalance(universe);
   universe.offseasonHistory ??= [];
   universe.offseason ??= null;
@@ -115,7 +124,7 @@ function normalizeUniverseForUi(universe) {
   universe.legacyHistory ??= [];
   universe.followedPlayerIds ??= [];
   if (!universe.teams?.every((team) => team.type === 'National' || team.strengthProfile)) universe.teams = recalculateTeamRatings(universe.teams, universe.players, universe.coaches, universe.owners);
-  universe.version = 9.5;
+  universe.version = 9.6;
   universe.teams?.forEach((team) => {
     if (team.type === 'NBA') team.localMinimum = 0;
     team.unavailablePlayers ??= [];
@@ -149,6 +158,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('');
   const [view, setView] = useState('World');
   const [marketTab, setMarketTab] = useState('Offseason Summary');
+  const [showPresentationSettings, setShowPresentationSettings] = useState(false);
   const [detail, setDetail] = useState(null);
   const [route, setRoute] = useState(() => parseHashRoute());
   const saveQueueRef = useRef(Promise.resolve());
@@ -233,7 +243,7 @@ export default function App() {
       setView('World');
       setDetail(null);
       goToRoute('world', true);
-      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 9.5 ? 'Older save loaded — v0.9.5 adds basketball team profiles, legacy-combination standards and stronger contender continuity.' : 'Save loaded');
+      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 9.6 ? 'Older save loaded — v0.9.6 adds postseason presentation and interactive showcase games.' : 'Save loaded');
     } catch (error) {
       setSaveStatus(`Load failed: ${error.message}`);
     } finally {
@@ -289,6 +299,22 @@ export default function App() {
     try { commitUniverse(simulateWeeks(universe, weeks)); }
     catch (error) { setSaveStatus(`Simulation error: ${error.message}`); }
   };
+  const confirmPresentation = (config) => {
+    try { commitUniverse(configureSeasonPresentation(universe, config)); setShowPresentationSettings(false); }
+    catch (error) { setSaveStatus(`Presentation setup error: ${error.message}`); }
+  };
+  const checkpointShowcase = (ticks) => {
+    try { commitUniverse(checkpointShowcaseGame(universe, ticks)); }
+    catch (error) { setSaveStatus(`Game simulation error: ${error.message}`); }
+  };
+  const skipShowcase = () => {
+    try { commitUniverse(skipCurrentShowcaseGame(universe)); }
+    catch (error) { setSaveStatus(`Game simulation error: ${error.message}`); }
+  };
+  const nextShowcase = () => {
+    try { commitUniverse(advanceShowcaseGame(universe)); }
+    catch (error) { setSaveStatus(`Game simulation error: ${error.message}`); }
+  };
   const beginOffseason = () => {
     try { commitUniverse(startOffseason(universe)); }
     catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
@@ -302,13 +328,14 @@ export default function App() {
     catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
   };
 
+  const presentationReady = universe.presentation?.confirmedYear === universe.year;
+  const showcaseGame = universe.showcase?.active ? universe.showcase.games?.[universe.showcase.currentIndex] : null;
+
   return <div className="app-shell">
     <header className="masthead"><div><div className="kicker light">The Global Five presents</div><h1>Basketball World Chronicle</h1></div><div className="masthead-actions"><div className="season-label"><strong>{universe.year}</strong><span>Week {universe.week} · {universe.phase}</span></div><button className="header-button" onClick={goHome}>⌂ Home</button><button className="header-button" onClick={() => void persistUniverse()}>💾 Save</button><span className={`save-status ${saveStatus.startsWith('Save failed') || saveStatus.includes('error') ? 'error' : ''}`}>{saveStatus}</span></div></header>
     <section className="simulation-toolbar global-simulation">
-      <div className="simulation-label"><strong>Advance the world</strong><span>Simulation controls stay above the menus.</span></div>
-      <button className="button primary" disabled={universe.yearReview} onClick={() => runWeeks(1)}>1 week</button>
-      <button className="button" disabled={universe.yearReview} onClick={() => runWeeks(4)}>4 weeks</button>
-      <button className="button" disabled={universe.yearReview} onClick={() => runWeeks(50)}>To year review</button>
+      <div className="simulation-label"><strong>{universe.showcase?.active ? 'Postseason showcase' : universe.yearReview ? 'Season complete' : 'Advance the world'}</strong><span>{universe.showcase?.active ? `Game ${universe.showcase.currentIndex + 1} of ${universe.showcase.games.length}` : !presentationReady && !universe.yearReview ? 'Choose which major tournament games you want to stop and watch.' : 'Simulation controls stay above the menus.'}</span></div>
+      {!universe.showcase?.active && !universe.yearReview && <><button className="button primary" disabled={!presentationReady} onClick={() => runWeeks(1)}>1 week</button><button className="button" disabled={!presentationReady} onClick={() => runWeeks(4)}>4 weeks</button><button className="button" disabled={!presentationReady} onClick={() => runWeeks(50)}>To postseason</button><button className="button subtle" onClick={() => setShowPresentationSettings((value)=>!value)}>{presentationReady ? 'Edit presentation' : 'Set presentation'}</button></>}
       {universe.yearReview && !universe.offseason?.active && <button className="button primary" onClick={beginOffseason}>Start offseason</button>}
       {universe.offseason?.active && <><button className="button primary" onClick={runOffseasonStage}>Run {OFFSEASON_STAGES[universe.offseason.stageIndex]}</button><button className="button" onClick={finishOffseason}>Finish offseason</button></>}
       <div className="toolbar-note">Slot {activeSlot} · {clubTeams.length} pro teams × 10 · {ncaaTeams.length} NCAA starting fives</div>
@@ -317,6 +344,8 @@ export default function App() {
     <main>
       {universe.yearReview && !universe.offseason?.active && <div className="year-review-banner"><strong>{universe.year} Year Review.</strong> Results now show the official champions, MVPs and leaders. Start the offseason when you are ready.</div>}
       {universe.offseason?.active && <div className="year-review-banner offseason"><strong>Offseason stage {universe.offseason.stageIndex + 1}/{OFFSEASON_STAGES.length}.</strong> {OFFSEASON_STAGES[universe.offseason.stageIndex]}. You can inspect Market after every stage before continuing.</div>}
+      {(!presentationReady || showPresentationSettings) && !universe.yearReview && !universe.offseason?.active && !universe.showcase?.active && <SeasonPresentationSetup universe={universe} onConfirm={confirmPresentation} />}
+      {universe.showcase?.active && showcaseGame ? <GameShowcaseView game={showcaseGame} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onCheckpoint={checkpointShowcase} onSkip={skipShowcase} onNext={nextShowcase} onPlayer={openPlayer} /> : <>
       <Breadcrumbs route={route} universe={universe} teamById={teamById} playerById={playerById} />
       {route.page === 'region' ? <RegionPage region={route.id} universe={universe} onCompetition={openCompetition} onCountry={openCountry} onTeam={openTeam} /> : route.page === 'country' ? <CountryPage country={route.id} universe={universe} onCompetition={openCompetition} onTeam={openTeam} onPlayer={openPlayer} /> : detail ? <DetailRouter detail={detail} universe={universe} teamById={teamById} playerById={playerById} coachById={coachById} onBack={() => window.history.back()} onTeam={openTeam} onPlayer={openPlayer} onCoach={openCoach} onCompetition={openCompetition} onToggleFollow={toggleFollowPlayer} /> : <>
         {view === 'World' && <WorldView universe={universe} setView={navigate} setMarketTab={setMarketTab} onTeam={openTeam} onPlayer={openPlayer} />}
@@ -330,13 +359,76 @@ export default function App() {
         {view === 'The Global Five' && <MagazineView universe={universe} onPlayer={openPlayer} />}
         {view === 'Almanac' && <AlmanacView universe={universe} onCompetition={openCompetition} />}
       </>}
+      </>}
     </main>
   </div>;
 }
 
+
+function SeasonPresentationSetup({ universe, onConfirm }) {
+  const [config, setConfig] = useState({ ...DEFAULT_PRESENTATION_CONFIG, ...(universe.presentation?.config ?? {}) });
+  useEffect(() => { setConfig({ ...DEFAULT_PRESENTATION_CONFIG, ...(universe.presentation?.config ?? {}) }); }, [universe.year]);
+  const activeInternational = COMPETITIONS.filter((competition) => competition.kind === 'international' && isCompetitionActive(competition, universe.year)).map((competition) => competition.name);
+  const rows = [
+    { key:'nba', title:'NBA', note:'Final = every NBA Finals game. Semifinals = both Conference Finals series + NBA Finals.' },
+    { key:'ncaa', title:'March Madness', note:'Final = National Championship. Semifinals = Final Four + Championship.' },
+    { key:'euroleague', title:'EuroLeague', note:'Final = championship game. Semifinals = Final Four semifinals + final.' },
+    { key:'international', title:'International tournaments', note:activeInternational.length ? activeInternational.join(' · ') : 'No major international tournament is scheduled this season.' },
+  ];
+  return <section className="presentation-setup panel">
+    <div className="presentation-head"><div><div className="kicker">Season presentation · {universe.year}</div><h2>Which big games should stop the simulation?</h2><p>The rest of the world simulates normally. Selected rounds become interactive showcase games before Year Review.</p></div><button className="button primary" onClick={()=>onConfirm(config)}>Confirm & start season</button></div>
+    <div className="presentation-grid">{rows.map((row)=><article className="presentation-card" key={row.key}><div><h3>{row.title}</h3><p>{row.note}</p></div><div className="presentation-choice">{['None','Final','Semifinals'].map((value)=><button key={value} className={config[row.key]===value?'active':''} disabled={row.key==='international'&&!activeInternational.length} onClick={()=>setConfig((current)=>({...current,[row.key]:value}))}>{value}</button>)}</div></article>)}</div>
+  </section>;
+}
+
+function livePeriodScore(game, tick, periodIndex) {
+  const length=game.periodMinutes;
+  const start=periodIndex*length;
+  if(tick<=start) return null;
+  const end=Math.min(tick,(periodIndex+1)*length);
+  const endEntry=game.timeline[end-1];
+  const before=start>0?game.timeline[start-1]:{scoreA:0,scoreB:0};
+  return { a:endEntry.scoreA-before.scoreA, b:endEntry.scoreB-before.scoreB, complete:tick>=(periodIndex+1)*length };
+}
+
+function GameShowcaseView({ game, index, total, onCheckpoint, onSkip, onNext, onPlayer }) {
+  const [tick, setTick] = useState(game.completedTicks ?? 0);
+  const [playing, setPlaying] = useState(false);
+  const [targetTick, setTargetTick] = useState(null);
+  useEffect(() => { setTick(game.completedTicks ?? 0); setPlaying(false); setTargetTick(null); }, [game.id]);
+  useEffect(() => {
+    if(!playing || targetTick==null) return undefined;
+    const timer=setInterval(()=>setTick((current)=>{
+      const next=Math.min(current+1,targetTick);
+      if(next>=targetTick){ clearInterval(timer); setPlaying(false); setTargetTick(null); onCheckpoint(next); }
+      return next;
+    }),220);
+    return ()=>clearInterval(timer);
+  },[playing,targetTick,game.id]);
+  const totalTicks=game.timeline.length;
+  const final=tick>=totalTicks;
+  const current= tick>0 ? game.timeline[Math.min(tick,totalTicks)-1] : { scoreA:0,scoreB:0,period:1,periodLabel:game.periodLabels[0],remaining:game.periodMinutes };
+  const nextPeriodIndex=Math.min(game.periodLabels.length-1,Math.floor(tick/game.periodMinutes));
+  const periodEnded=tick>0 && tick%game.periodMinutes===0;
+  const displayStatus= final ? 'FINAL' : periodEnded ? `End ${game.periodLabels[Math.max(0,nextPeriodIndex-1)]}` : `${current.periodLabel} · ${current.remaining}:00`;
+  const playNextPeriod=()=>{ const target=Math.min(totalTicks,(Math.floor(tick/game.periodMinutes)+1)*game.periodMinutes); setTargetTick(target); setPlaying(true); };
+  const skip=()=>{ setPlaying(false); setTick(totalTicks); onSkip(); };
+  return <div className="showcase-page">
+    <div className="showcase-meta"><div><div className="kicker">{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</div><h2>Postseason showcase</h2><p>Game {index+1} of {total}. Watch minute by minute, stop after each period, or skip directly to the final box score.</p></div><div className="showcase-actions">{!final&&<><button className="button primary" disabled={playing} onClick={playNextPeriod}>{playing?'Simulating…':`Play ${game.periodLabels[nextPeriodIndex]}`}</button><button className="button" disabled={playing} onClick={skip}>Skip game</button></>}{final&&<button className="button primary" onClick={onNext}>{index+1<total?'Next game':'Continue to Year Review'}</button>}</div></div>
+    <section className="live-scoreboard panel"><div className="showcase-team"><strong>{game.teamA}</strong><span>{current.scoreA}</span></div><div className="showcase-clock"><strong>{displayStatus}</strong><small>{game.competition}</small></div><div className="showcase-team away"><strong>{game.teamB}</strong><span>{current.scoreB}</span></div></section>
+    <section className="period-strip">{game.periodLabels.map((label,periodIndex)=>{const score=livePeriodScore(game,tick,periodIndex);return <article key={label} className={score?.complete?'complete':periodIndex===nextPeriodIndex&&!final?'current':''}><span>{label}</span><strong>{score?`${score.a}–${score.b}`:'—'}</strong></article>;})}</section>
+    {!final&&<section className="panel live-minute-panel"><div className="minute-progress"><span style={{width:`${Math.round(tick/Math.max(1,totalTicks)*100)}%`}}/></div><div className="live-minute-copy"><strong>{playing?'Game running…':'Paused'}</strong><span>{periodEnded&&tick<totalTicks?'Period complete. Continue when ready.':'One simulation tick = one game minute.'}</span></div></section>}
+    {final&&<><section className="panel game-mvp"><div className="kicker">Game MVP</div><button onClick={()=>onPlayer(game.mvp.playerId)}><strong>{game.mvp.player}</strong><span>{game.mvp.team}</span></button><div className="mvp-statline"><b>{game.mvp.points} PTS</b><span>{game.mvp.rebounds} REB ({game.mvp.orpg} O / {game.mvp.drpg} D)</span><span>{game.mvp.assists} AST</span><span>{game.mvp.steals} STL</span><span>{game.mvp.blocks} BLK</span></div></section><div className="showcase-box-grid"><GameBox team={game.teamA} score={game.scoreA} rows={game.boxA} onPlayer={onPlayer}/><GameBox team={game.teamB} score={game.scoreB} rows={game.boxB} onPlayer={onPlayer}/></div></>}
+  </div>;
+}
+
+function GameBox({ team, score, rows, onPlayer }) {
+  return <section className="panel game-box"><div className="section-header"><h2>{team}</h2><strong>{score}</strong></div><div className="table-wrap"><table className="compact-table"><thead><tr><th>Player</th><th>PTS</th><th>OREB</th><th>DREB</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th></tr></thead><tbody>{rows.map((row)=><tr key={row.playerId} className="clickable" onClick={()=>onPlayer(row.playerId)}><td><strong>{row.player}</strong><br/><small>{row.position} · {row.current} OVR</small></td><td><strong>{row.points}</strong></td><td>{row.orpg}</td><td>{row.drpg}</td><td>{row.rebounds}</td><td>{row.assists}</td><td>{row.steals}</td><td>{row.blocks}</td></tr>)}</tbody></table></div></section>;
+}
+
 function SaveHome({ slots, onContinue, onNew, onDelete, status }) {
   const rows = [1, 2, 3].map((slot) => ({ slot, record: slots.find((item) => item.slot === slot) }));
-  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 9.5 && <small className="legacy-save-note">Older world: playable. v0.9.5 adds team-area profiles, stricter legacy combinations and stronger contender continuity.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
+  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 9.6 && <small className="legacy-save-note">Older world: playable. v0.9.6 adds postseason presentation, minute-by-minute showcase games and complete game box scores.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
 }
 
 
