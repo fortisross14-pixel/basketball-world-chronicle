@@ -1093,7 +1093,7 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 9.6, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
+    version: 9.7, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {}, hallOfFame: { nba: [], fiba: [] }, legacyHistory: [],
