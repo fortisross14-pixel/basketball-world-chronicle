@@ -1,7 +1,7 @@
 {
   "name": "basketball-world-chronicle",
   "private": true,
-  "version": "0.9.7",
+  "version": "0.9.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "npm run validate",
     "validate": "BWC_QUICK=1 node scripts/validate.mjs",
-    "validate:full": "node --expose-gc scripts/validate.mjs"
+    "validate:full": "node --expose-gc scripts/validate.mjs",
+    "assets": "node scripts/fetch-team-logos.mjs",
+    "prebuild": "node scripts/fetch-team-logos.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
