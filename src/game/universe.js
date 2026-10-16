@@ -1093,7 +1093,7 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 9.8, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
+    version: 11, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {}, hallOfFame: { nba: [], fiba: [] }, legacyHistory: [],
@@ -1203,15 +1203,32 @@ function splitPeriodScore(total, count, random) {
   return allocateIntegerTotal(total, weights, random);
 }
 
-function minuteIncrements(periodTotal, minutes, random) {
-  const values = Array(minutes).fill(0);
-  let remaining = periodTotal;
-  while (remaining > 0) {
-    const bundle = remaining >= 3 && random() < 0.28 ? 3 : remaining >= 2 && random() < 0.82 ? 2 : 1;
-    values[Math.floor(random()*minutes)] += bundle;
-    remaining -= bundle;
+function pairedMinuteIncrements(totalA,totalB,minutes,random) {
+  let wave=(random()-0.5)*0.8;
+  const weightsA=[],weightsB=[];
+  for(let minute=0;minute<minutes;minute+=1){
+    wave=clamp(wave+(random()-0.5)*0.95,-1.65,1.65);
+    if(random()<0.12) wave*=-0.72;
+    const late=Math.abs(minute-(minutes-1))*0.02;
+    weightsA.push(Math.max(.18,1+wave*.38+(random()-.5)*.7+late));
+    weightsB.push(Math.max(.18,1-wave*.38+(random()-.5)*.7+late));
   }
-  return values;
+  const rawA=allocateIntegerTotal(totalA,weightsA,random);
+  const rawB=allocateIntegerTotal(totalB,weightsB,random);
+  const smooth=(values)=>{
+    for(let pass=0;pass<3;pass+=1){
+      for(let i=0;i<values.length;i+=1){
+        while(values[i]>7){
+          const candidates=[i-1,i+1,i-2,i+2].filter((j)=>j>=0&&j<values.length&&values[j]<5);
+          if(!candidates.length) break;
+          const target=candidates[Math.floor(random()*candidates.length)];
+          values[i]-=2; values[target]+=2;
+        }
+      }
+    }
+    return values;
+  };
+  return [smooth(rawA),smooth(rawB)];
 }
 
 function detailedScoreForGame(state, competition, teamA, teamB, forcedWinnerId, storedScoreA = null, storedScoreB = null) {
@@ -1265,11 +1282,10 @@ function buildDetailedGame(state, competition, teamA, teamB, forcedWinnerId, sto
   const timeline = [];
   let liveA=0, liveB=0;
   for (let period=0;period<structure.count;period+=1) {
-    const incA=minuteIncrements(periodA[period],structure.minutes,random);
-    const incB=minuteIncrements(periodB[period],structure.minutes,random);
+    const [incA,incB]=pairedMinuteIncrements(periodA[period],periodB[period],structure.minutes,random);
     for (let minute=0;minute<structure.minutes;minute+=1) {
       liveA+=incA[minute]; liveB+=incB[minute];
-      timeline.push({ period:period+1, periodLabel:structure.labels[period], minute:minute+1, remaining:structure.minutes-minute-1, scoreA:liveA, scoreB:liveB, deltaA:incA[minute], deltaB:incB[minute] });
+      timeline.push({ period:period+1, periodLabel:structure.labels[period], minute:minute+1, remaining:structure.minutes-minute-1, scoreA:liveA, scoreB:liveB, deltaA:incA[minute], deltaB:incB[minute], differential:liveA-liveB });
     }
   }
   const boxA=gameBoxForTeam(state,teamA,scoreA,competition);
@@ -1281,9 +1297,11 @@ function buildDetailedGame(state, competition, teamA, teamB, forcedWinnerId, sto
   return {
     id:`${state.year}-${competition.id}-${meta.roundName??'round'}-${meta.seriesIndex??0}-${meta.gameNumber??1}-${teamA.id}-${teamB.id}`,
     year:state.year, competitionId:competition.id, competition:competition.name, round:meta.roundName??'Final', seriesIndex:meta.seriesIndex??0, gameNumber:meta.gameNumber??1,
-    teamAId:teamA.id, teamA:teamA.name, teamBId:teamB.id, teamB:teamB.name, winnerId, scoreA, scoreB,
+    teamAId:teamA.id, teamA:teamA.name, teamAColor:teamA.color||'#315d9b', teamBId:teamB.id, teamB:teamB.name, teamBColor:teamB.color||'#b43843', winnerId, scoreA, scoreB,
     periodLabels:structure.labels, periodMinutes:structure.minutes, periodScoresA:periodA, periodScoresB:periodB, timeline, boxA, boxB,
     mvp:{ playerId:mvp?.playerId, player:mvp?.player, teamId:mvp?.teamId, team:mvp?.team, points:mvp?.points??0, rebounds:mvp?.rebounds??0, orpg:mvp?.orpg??0, drpg:mvp?.drpg??0, assists:mvp?.assists??0, steals:mvp?.steals??0, blocks:mvp?.blocks??0 },
+    isSeriesClincher:Boolean(meta.isSeriesClincher), isChampionshipClincher:Boolean(meta.isChampionshipClincher), advances:Boolean(meta.advances),
+    seriesWinsA:meta.seriesWinsA??null, seriesWinsB:meta.seriesWinsB??null,
     completedTicks:0, status:'Pending',
   };
 }
@@ -1301,7 +1319,18 @@ function seriesDetailedGames(state, competition, match, roundName, seriesIndex) 
   for(let i=0;i<loserWins;i+=1) prior.push(loserId);
   for(let i=prior.length-1;i>0;i-=1){const j=Math.floor(stateRandom(state)*(i+1));[prior[i],prior[j]]=[prior[j],prior[i]];}
   prior.push(winnerId);
-  return prior.map((gameWinnerId,index)=>buildDetailedGame(state,competition,teamA,teamB,gameWinnerId,null,null,{roundName,seriesIndex,gameNumber:index+1}));
+  let liveWinsA=0, liveWinsB=0;
+  return prior.map((gameWinnerId,index)=>{
+    if(gameWinnerId===teamA.id) liveWinsA+=1; else liveWinsB+=1;
+    const clincher=index===prior.length-1;
+    return buildDetailedGame(state,competition,teamA,teamB,gameWinnerId,null,null,{
+      roundName,seriesIndex,gameNumber:index+1,
+      isSeriesClincher:clincher,
+      isChampionshipClincher:clincher&&roundName==='NBA Finals',
+      advances:clincher,
+      seriesWinsA:liveWinsA, seriesWinsB:liveWinsB,
+    });
+  });
 }
 
 function prepareSeasonShowcase(state) {
@@ -1322,7 +1351,12 @@ function prepareSeasonShowcase(state) {
         if(competition.id==='nba') queue.push(...seriesDetailedGames(state,competition,match,round.name,seriesIndex));
         else {
           const teamA=state.teams.find((team)=>team.id===match.teamAId); const teamB=state.teams.find((team)=>team.id===match.teamBId);
-          if(teamA&&teamB) queue.push(buildDetailedGame(state,competition,teamA,teamB,match.winnerId,match.scoreA,match.scoreB,{roundName:round.name,seriesIndex,gameNumber:1}));
+          if(teamA&&teamB) queue.push(buildDetailedGame(state,competition,teamA,teamB,match.winnerId,match.scoreA,match.scoreB,{
+            roundName:round.name,seriesIndex,gameNumber:1,
+            isSeriesClincher:true,
+            isChampionshipClincher:['Final','National Championship'].includes(round.name),
+            advances:true,
+          }));
         }
       });
     });

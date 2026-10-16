@@ -24,7 +24,22 @@ import { isCompetitionActive } from './data/competitionData.js';
 import { DETAILED_COUNTRY_SPECS, SUMMARY_COUNTRY_SPECS } from './data/worldData.js';
 import { TeamBadge, PlayerPortrait, CoachPortrait, CompetitionEmblem, RatingPill } from './components/VisualIdentity.jsx';
 
-const NAV = ['World','Results','Tournaments','Teams','Players','Coaches','Market','Statistics','The Global Five','Almanac'];
+const NAV = ['World','Events','People','Market','Chronicle'];
+const NAV_GROUPS = {
+  World: ['World','Teams','Tournaments'],
+  Events: ['Tournaments','Results'],
+  People: ['Players','Coaches','Statistics'],
+  Market: ['Market'],
+  Chronicle: ['The Global Five','Almanac','Results'],
+};
+const NAV_DEFAULTS = {World:'World',Events:'Tournaments',People:'Players',Market:'Market',Chronicle:'The Global Five'};
+function activeNavigationGroup(view) {
+  if (view === 'Market') return 'Market';
+  if (['Players','Coaches','Statistics'].includes(view)) return 'People';
+  if (view === 'Results') return 'Events';
+  if (['The Global Five','Almanac'].includes(view)) return 'Chronicle';
+  return 'World';
+}
 const RARITY_ORDER = ['Generational','Legend','Epic','Rare','Uncommon','Common'];
 const unique = (items) => [...new Set(items)].filter((item) => item !== null && item !== undefined && item !== '').sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 const pct = (value) => `${Math.round(value * 100)}%`;
@@ -88,6 +103,73 @@ function competitionInRegion(competition, region) {
   return competition.region === region || competition.countries?.includes(region);
 }
 
+const MAJOR_COMPETITION_IDS = ['nba','euroleague','ncaa-tournament','olympic-basketball-tournament','fiba-world-cup','eurobasket','fiba-americup','afrobasket','fiba-asia-cup'];
+const MAJOR_COMPETITION_SET = new Set(MAJOR_COMPETITION_IDS);
+function allUniversePlayers(universe) { return [...(universe.players??[]), ...(universe.retiredPlayers??[])]; }
+function majorSeasonRows(universe, year) {
+  return MAJOR_COMPETITION_IDS.map((id)=>({ competition:getCompetition(id), season:(universe.competitionHistory?.[id]??[]).find((row)=>Number(row.year)===Number(year)) })).filter((row)=>row.competition&&row.season);
+}
+function playerAgeInYear(player, year, universeYear) {
+  const season=(player.history??[]).find((row)=>Number(row.year)===Number(year));
+  return season?.age ?? Math.max(18, Number(player.age??25)-(Number(universeYear)-Number(year)));
+}
+function buildChronicleStories(universe, year) {
+  const stories=[]; const players=allUniversePlayers(universe); const playerById=new Map(players.map((p)=>[p.id,p]));
+  const push=(story)=>{ if(!stories.some((item)=>item.key===story.key)) stories.push(story); };
+  majorSeasonRows(universe,year).forEach(({competition,season})=>{
+    const history=(universe.competitionHistory?.[competition.id]??[]).filter((row)=>Number(row.year)<=Number(year)).sort((a,b)=>Number(b.year)-Number(a.year));
+    const streak=(()=>{let count=0;for(const row of history){if(row.championTeamId===season.championTeamId)count+=1;else break;}return count;})();
+    const previous=history.filter((row)=>Number(row.year)<Number(year));
+    const priorTitles=previous.filter((row)=>row.championTeamId===season.championTeamId).length;
+    if(streak>=2) push({key:`dynasty-${competition.id}-${season.championTeamId}-${year}`,score:100+streak*5,icon:'♛',category:'Dynasty',title:`${season.champion} makes it ${streak} straight`,body:`A sustained run at the top of ${competition.name}. This is no longer a one-season peak.` ,teamId:season.championTeamId});
+    else if(priorTitles===0) push({key:`first-${competition.id}-${season.championTeamId}-${year}`,score:78,icon:'🏆',category:'Breakthrough',title:`${season.champion} breaks through in ${competition.name}`,body:`The club records its first championship of the simulated era in ${year}.`,teamId:season.championTeamId});
+    const champStanding=(season.standings??[]).find((row)=>row.teamId===season.championTeamId); const bestRating=Math.max(...(season.standings??[]).map((row)=>Number(row.rating)||0),0);
+    if(champStanding && bestRating-Number(champStanding.rating)>=5.5) push({key:`upset-${competition.id}-${year}`,score:91,icon:'⚡',category:'Shock',title:`A genuine ${competition.name} upset`,body:`${season.champion} won from ${champStanding.rating} team strength despite the field reaching ${bestRating}.`,teamId:season.championTeamId});
+    const mvp=playerById.get(season.mvp?.id); if(mvp){const age=playerAgeInYear(mvp,year,universe.year);if(['Generational','Legend'].includes(mvp.rarity)&&age<=22)push({key:`young-mvp-${competition.id}-${mvp.id}-${year}`,score:96,icon:'✦',category:'Arrival',title:`${mvp.name} announces himself at ${age}`,body:`The ${mvp.rarity.toLowerCase()} talent wins ${competition.name} MVP before reaching his prime.`,playerId:mvp.id}); if(age>=34)push({key:`old-mvp-${competition.id}-${mvp.id}-${year}`,score:88,icon:'⌛',category:'Vintage',title:`${mvp.name} turns back the clock`,body:`At ${age}, he is still good enough to win ${competition.name} MVP.`,playerId:mvp.id}); if(competition.id==='euroleague'&&mvp.draft&&mvp.teamType!=='NBA')push({key:`euro-revival-${mvp.id}-${year}`,score:92,icon:'↗',category:'Career turn',title:`${mvp.name} owns Europe`,body:`An NBA-drafted player becomes EuroLeague MVP outside the NBA — exactly the kind of alternate career this universe can create.`,playerId:mvp.id});}
+  });
+  const legacy=(universe.legacyHistory??[]).find((row)=>Number(row.year)===Number(year));
+  (legacy?.nbaInductions??[]).forEach((entry)=>push({key:`nba-hof-${entry.playerId}-${year}`,score:98,icon:'★',category:'Legacy',title:`${entry.player} enters the NBA Hall of Fame`,body:`A completed career earns basketball immortality with a legacy score of ${entry.score}.`,playerId:entry.playerId}));
+  (legacy?.fibaInductions??[]).forEach((entry)=>push({key:`fiba-hof-${entry.playerId}-${year}`,score:96,icon:'🌍',category:'Legacy',title:`${entry.player} enters the FIBA Hall of Fame`,body:`Club and international achievements combine into a Hall of Fame career.`,playerId:entry.playerId}));
+  (legacy?.jerseyRetirements??[]).forEach((entry)=>push({key:`jersey-${entry.teamId}-${entry.playerId}-${year}`,score:93,icon:'🎽',category:'Franchise icon',title:`${entry.team} retires #${entry.number}`,body:`${entry.player}'s number leaves circulation after an extraordinary team-specific career.`,playerId:entry.playerId,teamId:entry.teamId}));
+  (universe.retirements??[]).filter((row)=>Number(row.year)===Number(year)).forEach((row)=>{const p=playerById.get(row.playerId);if(p&&(['Generational','Legend'].includes(p.rarity)||(p.honors?.length??0)>=10))push({key:`retire-${p.id}-${year}`,score:86,icon:'👋',category:'Farewell',title:`${p.name} closes his career`,body:`${p.rarity} · ${(p.history??[]).length} recorded seasons · ${(p.honors??[]).length} honors.`,playerId:p.id});});
+  const summer=(universe.offseasonHistory??[]).find((row)=>Number(row.year)===Number(year)+1);
+  if(summer){const riser=[...(summer.teams??[])].sort((a,b)=>b.delta-a.delta)[0];if(riser?.delta>=4)push({key:`summer-${riser.teamId}-${year}`,score:80,icon:'📈',category:'Power shift',title:`${riser.team} transforms its roster`,body:`A ${riser.delta>=0?'+':''}${riser.delta} offseason jump (${riser.before} → ${riser.after}) changes the competitive picture.`,teamId:riser.teamId});}
+  if(stories.length<3){majorSeasonRows(universe,year).slice(0,3).forEach(({competition,season})=>push({key:`champ-${competition.id}-${year}`,score:60,icon:'🏆',category:'Champion',title:`${season.champion} wins ${competition.name}`,body:`${season.runnerUp} finishes runner-up. ${season.mvp?.name??'—'} is named MVP.`,teamId:season.championTeamId,playerId:season.mvp?.id}));}
+  return stories.sort((a,b)=>b.score-a.score).slice(0,8);
+}
+function teamEraStatus(universe, team) {
+  const recent=[...(team.history??[])].sort((a,b)=>Number(b.year)-Number(a.year)).slice(0,4); const majorTitles=recent.flatMap((row)=>row.titles??[]).filter((title)=>/NBA|EuroLeague|NCAA|Olympic|World Cup/i.test(title)).length;
+  const {peers}=teamStrengthContext(universe,team); const sorted=[...peers].sort((a,b)=>b.rating-a.rating); const rank=Math.max(0,sorted.findIndex((item)=>item.id===team.id)); const pctRank=rank/Math.max(1,sorted.length-1);
+  if(majorTitles>=2) return {label:'Dynasty',tone:'dynasty'}; if(recent[0]?.titles?.length) return {label:'Champion',tone:'champion'}; if(pctRank<=.18) return {label:'Contender',tone:'contender'}; if(pctRank>=.72) return {label:'Rebuilding',tone:'rebuild'}; return {label:'Competitive',tone:'competitive'};
+}
+function startingFiveFor(team, universe) { return POSITION_ORDER.map((position)=>team.rosterIds.map((id)=>universe.players.find((p)=>p.id===id)).filter((p)=>p?.position===position).sort((a,b)=>b.current-a.current)[0]).filter(Boolean); }
+function playerCareerStage(player) { if(['Retired','Left professional basketball'].includes(player.status))return 'Retired'; if(player.age<=21)return 'Prospect'; if(player.age<=24)return 'Rising'; if(player.age<=31)return 'Prime'; if(player.age<=35)return 'Veteran'; return 'Late career'; }
+function careerVerdict(player) { const honors=player.honors??[]; const titles=honors.filter((h)=>h.category==='team'||h.type==='Team title').length; const mvps=honors.filter((h)=>/MVP/i.test(h.type??'')).length; const bestFive=honors.filter((h)=>/^Best /.test(h.type??'')).length; if(player.rarity==='Generational'&&mvps>=2)return `Era-defining superstar · ${titles} titles · ${mvps} MVP-level awards`; if(mvps>=2&&titles>=1)return `Championship centerpiece · ${titles} titles · ${mvps} MVP-level awards`; if(bestFive>=4)return `Long-term elite performer · ${bestFive} Best Five selections`; if(honors.length>=8)return `Accomplished star · ${honors.length} recorded honors`; return `${(player.history??[]).length} recorded seasons · ${honors.length} honors`; }
+function dynastyRows(universe, competitionId) {
+  const seasons=[...(universe.competitionHistory?.[competitionId]??[])].sort((a,b)=>Number(a.year)-Number(b.year)); const totals=new Map(); const runs=[]; let current=null;
+  seasons.forEach((season)=>{totals.set(season.championTeamId,(totals.get(season.championTeamId)??0)+1); if(current?.teamId===season.championTeamId){current.end=season.year;current.streak+=1;}else{current={teamId:season.championTeamId,team:season.champion,start:season.year,end:season.year,streak:1};runs.push(current);}});
+  return runs.map((run)=>({...run,totalTitles:totals.get(run.teamId)??run.streak})).sort((a,b)=>b.streak-a.streak||b.totalTitles-a.totalTitles||Number(b.end)-Number(a.end)).slice(0,12);
+}
+function careerStatLeaders(universe,key) {
+  return allUniversePlayers(universe).map((player)=>{let value=0,games=0;(player.history??[]).forEach((row)=>{const gp=Number(row.games)||0;games+=gp;value+=(Number(row[key])||0)*gp;});return{playerId:player.id,player:player.name,rarity:player.rarity,games,value:Math.round(value)};}).filter((row)=>row.games>0).sort((a,b)=>b.value-a.value).slice(0,10);
+}
+
+function rivalryRows(universe) {
+  const map=new Map(); MAJOR_COMPETITION_IDS.forEach((competitionId)=>{(universe.competitionHistory?.[competitionId]??[]).forEach((season)=>{(season.bracket??[]).forEach((round)=>{(round.matches??[]).forEach((match)=>{if(!match.teamAId||!match.teamBId)return;const ids=[match.teamAId,match.teamBId].sort((a,b)=>String(a).localeCompare(String(b)));const key=ids.join('|');let row=map.get(key);if(!row){const a=universe.teams.find((t)=>t.id===ids[0]),b=universe.teams.find((t)=>t.id===ids[1]);row={key,teamAId:ids[0],teamBId:ids[1],teamA:a?.name??match.teamA,teamB:b?.name??match.teamB,meetings:0,winsA:0,winsB:0,majorRounds:0,lastYear:season.year,competitions:new Set()};map.set(key,row);}row.meetings+=1;row.lastYear=Math.max(Number(row.lastYear),Number(season.year));row.competitions.add(getCompetition(competitionId)?.name??competitionId);if(match.winnerId===row.teamAId)row.winsA+=1;else if(match.winnerId===row.teamBId)row.winsB+=1;if(/Final|Conference|Semifinal|Final Four/i.test(round.name))row.majorRounds+=1;});});});});
+  return [...map.values()].filter((r)=>r.meetings>=2).map((r)=>({...r,competitions:[...r.competitions],score:r.meetings*4+r.majorRounds*3-Math.abs(r.winsA-r.winsB)})).sort((a,b)=>b.score-a.score||b.lastYear-a.lastYear).slice(0,12);
+}
+function internationalLegacyRows(universe) {
+  const ids=['olympic-basketball-tournament','fiba-world-cup','eurobasket','fiba-americup','fiba-asia-cup','afrobasket']; const map=new Map();
+  ids.forEach((id)=>{const weight=['olympic-basketball-tournament','fiba-world-cup'].includes(id)?3:1;(universe.competitionHistory?.[id]??[]).forEach((season)=>{const key=season.championTeamId??season.champion;const row=map.get(key)??{teamId:season.championTeamId,team:season.champion,major:0,regional:0,score:0,lastYear:season.year};if(weight===3)row.major+=1;else row.regional+=1;row.score+=weight;row.lastYear=Math.max(Number(row.lastYear),Number(season.year));map.set(key,row);});});
+  return [...map.values()].sort((a,b)=>b.score-a.score||b.major-a.major||b.lastYear-a.lastYear).slice(0,12);
+}
+function singleSeasonLeaders(universe,key) {
+  const rows=[]; allUniversePlayers(universe).forEach((player)=>(player.history??[]).forEach((season)=>{if(Number.isFinite(Number(season[key])))rows.push({playerId:player.id,player:player.name,rarity:player.rarity,year:season.year,team:season.team,value:Number(season[key])});})); return rows.sort((a,b)=>b.value-a.value).slice(0,10);
+}
+function franchiseFiveFor(team,universe) {
+  const players=allUniversePlayers(universe); return POSITION_ORDER.map((position)=>players.filter((p)=>p.position===position&&(p.history??[]).some((h)=>h.teamId===team.id)).map((p)=>{const seasons=(p.history??[]).filter((h)=>h.teamId===team.id);const teamHonors=(p.honors??[]).filter((h)=>h.teamId===team.id).length;const best=Math.max(...seasons.map((h)=>Number(h.current)||0),0);return{player:p,score:best+seasons.length*1.5+teamHonors*2.2,seasons:seasons.length};}).sort((a,b)=>b.score-a.score)[0]).filter(Boolean);
+}
+
 const NAV_ROUTES = { World:'world', Results:'results', Tournaments:'tournaments', Teams:'teams', Players:'players', Coaches:'coaches', Market:'market/summary', Statistics:'statistics', 'The Global Five':'magazine', Almanac:'almanac' };
 const MARKET_ROUTE_TO_TAB = { summary:'Offseason Summary', trades:'Trades', transfers:'Transfers', draft:'Draft', rights:'Rights', 'free-agency':'Free Agency', retirements:'Retirements', legacy:'Hall of Fame', spawn:'Spawn', coaches:'Coaches' };
 const MARKET_TAB_TO_ROUTE = Object.fromEntries(Object.entries(MARKET_ROUTE_TO_TAB).map(([routeName, tabName]) => [tabName, routeName]));
@@ -121,7 +203,7 @@ function normalizeUniverseForUi(universe) {
   universe.legacyHistory ??= [];
   universe.followedPlayerIds ??= [];
   if (!universe.teams?.every((team) => team.type === 'National' || team.strengthProfile)) universe.teams = recalculateTeamRatings(universe.teams, universe.players, universe.coaches, universe.owners);
-  universe.version = 9.8;
+  universe.version = 11;
   universe.teams?.forEach((team) => {
     if (team.type === 'NBA') team.localMinimum = 0;
     team.unavailablePlayers ??= [];
@@ -244,7 +326,7 @@ export default function App() {
       setView('World');
       setDetail(null);
       goToRoute('world', true);
-      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 9.8 ? 'Older save loaded — v0.9.8 adds packaged portraits, logo assets and unlocked showcase navigation.' : 'Save loaded');
+      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 11 ? 'Older save loaded — v1.0 adds the full Nexus-style event, year-end and Chronicle presentation. Existing worlds remain playable.' : 'Save loaded');
     } catch (error) {
       setSaveStatus(`Load failed: ${error.message}`);
     } finally {
@@ -342,9 +424,10 @@ export default function App() {
       {universe.offseason?.active && <><button className="button primary" onClick={runOffseasonStage}>Run {OFFSEASON_STAGES[universe.offseason.stageIndex]}</button><button className="button" onClick={finishOffseason}>Finish offseason</button></>}
       <div className="toolbar-note">Slot {activeSlot} · {clubTeams.length} pro teams × 10 · {ncaaTeams.length} NCAA starting fives</div>
     </section>
-    <nav className="main-nav">{NAV.map((item) => <button key={item} className={view === item ? 'active' : ''} onClick={() => navigate(item)}>{item}</button>)}</nav>
+    <nav className="main-nav" aria-label="Main sections">{NAV.map((item) => <button key={item} className={activeNavigationGroup(view) === item ? 'active' : ''} onClick={() => navigate(NAV_DEFAULTS[item])}>{item}</button>)}</nav>
+    <nav className="chronicle-subnav" aria-label="Section pages">{NAV_GROUPS[activeNavigationGroup(view)].map((item)=><button key={item} className={view===item?'active':''} onClick={()=>navigate(item)}>{item==='The Global Five'?'Magazine':item}</button>)}</nav>
     <main>
-      {universe.yearReview && !universe.offseason?.active && <div className="year-review-banner"><strong>{universe.year} Year Review.</strong> Results now show the official champions, MVPs and leaders. Start the offseason when you are ready.</div>}
+      {universe.yearReview && !universe.offseason?.active && <YearEndExperience universe={universe} onTeam={openTeam} onPlayer={openPlayer} onStartOffseason={beginOffseason}/>}
       {universe.offseason?.active && <div className="year-review-banner offseason"><strong>Offseason stage {universe.offseason.stageIndex + 1}/{OFFSEASON_STAGES.length}.</strong> {OFFSEASON_STAGES[universe.offseason.stageIndex]}. You can inspect Market after every stage before continuing.</div>}
       {(!presentationReady || showPresentationSettings) && !universe.yearReview && !universe.offseason?.active && !universe.showcase?.active && <SeasonPresentationSetup universe={universe} onConfirm={confirmPresentation} />}
       {universe.showcase?.active && showcaseGame && showShowcasePanel && <GameShowcaseView game={showcaseGame} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onCheckpoint={checkpointShowcase} onSkip={skipShowcase} onNext={nextShowcase} onPlayer={openPlayer} onClose={() => setShowShowcasePanel(false)} />}
@@ -359,16 +442,55 @@ export default function App() {
         {view === 'Coaches' && <CoachesView universe={universe} onCoach={openCoach} onTeam={openTeam} />}
         {view === 'Market' && <MarketView universe={universe} tab={marketTab} setTab={(tab) => { setMarketTab(tab); goToRoute(`market/${MARKET_TAB_TO_ROUTE[tab] ?? 'transfers'}`); }} onPlayer={openPlayer} onTeam={openTeam} onCoach={openCoach} />}
         {view === 'Statistics' && <StatisticsView universe={universe} teamById={teamById} onPlayer={openPlayer} />}
-        {view === 'The Global Five' && <MagazineView universe={universe} onPlayer={openPlayer} />}
+        {view === 'The Global Five' && <MagazineView universe={universe} onPlayer={openPlayer} onTeam={openTeam} />}
         {view === 'Almanac' && <AlmanacView universe={universe} onCompetition={openCompetition} />}
       </>}
     </main>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {[['World','⌂'],['The Global Five','★'],['Tournaments','🏆'],['Teams','◈'],['Players','♟'],['Market','⇄']].map(([item,icon])=><button key={item} className={view===item?'active':''} onClick={()=>navigate(item)}><span>{icon}</span><small>{item==='The Global Five'?'Magazine':item}</small></button>)}
+      {[['World','⌂'],['Events','🏆'],['People','♟'],['Market','⇄'],['Chronicle','★']].map(([item,icon])=><button key={item} className={activeNavigationGroup(view)===item?'active':''} onClick={()=>navigate(NAV_DEFAULTS[item])}><span>{icon}</span><small>{item}</small></button>)}
     </nav>
   </div>;
 }
 
+
+
+function StoryCard({story,onPlayer,onTeam}) {
+  const action=story.playerId?()=>onPlayer?.(story.playerId):story.teamId?()=>onTeam?.(story.teamId):null;
+  const Tag=action?'button':'article';
+  return <Tag className={`chronicle-story story-${String(story.category).toLowerCase().replace(/\s+/g,'-')}`} onClick={action}><span className="story-icon">{story.icon}</span><div><small>{story.category}</small><strong>{story.title}</strong><p>{story.body}</p></div></Tag>;
+}
+function YearEndExperience({universe,onTeam,onPlayer,onStartOffseason}) {
+  const [chapter,setChapter]=useState(0); const [open,setOpen]=useState(true); const year=universe.year;
+  const majors=majorSeasonRows(universe,year); const stories=buildChronicleStories(universe,year); const allPlayers=allUniversePlayers(universe); const playerById=new Map(allPlayers.map((p)=>[p.id,p]));
+  const prospects=universe.players.filter((p)=>p.age<=22&&p.status==='Active').sort((a,b)=>RARITY_ORDER.indexOf(a.rarity)-RARITY_ORDER.indexOf(b.rarity)||b.base-a.base||b.current-a.current).slice(0,8);
+  const legacy=(universe.legacyHistory??[]).find((row)=>Number(row.year)===Number(year));
+  const chapters=['Champions','Awards','Stories','Future','Legacy'];
+  if(!open)return <div className="year-review-dock panel"><div><strong>{year} Chronicle complete</strong><span>Champions, awards and season stories are ready.</span></div><button className="button primary" onClick={()=>setOpen(true)}>Open Year Review</button></div>;
+  return <section className="year-end-experience">
+    <div className="year-end-hero"><div><div className="kicker light">The Global Five · Year End</div><h2>{year} Basketball Chronicle</h2><p>The season is complete. Reveal the champions, defining performances and the stories that changed the world.</p></div><div className="year-end-number">{year}</div></div>
+    <div className="year-end-chapters">{chapters.map((name,index)=><button key={name} className={chapter===index?'active':chapter>index?'done':''} onClick={()=>setChapter(index)}><span>{index+1}</span>{name}</button>)}</div>
+    {chapter===0&&<div className="year-end-grid champion-grid">{majors.map(({competition,season})=>{const team=universe.teams.find((t)=>t.id===season.championTeamId);return <button className="year-champion-card" key={competition.id} onClick={()=>onTeam(season.championTeamId)} style={{'--champ-color':team?.color||'#173b67'}}><CompetitionEmblem competition={competition} size={54}/><div><small>{competition.name}</small><strong>{season.champion}</strong><span>over {season.runnerUp}</span></div><TeamMark team={team} size={66}/></button>})}{!majors.length&&<div className="empty-state">No major championship completed this year.</div>}</div>}
+    {chapter===1&&<div className="year-awards-grid">{majors.map(({competition,season})=>{const mvp=playerById.get(season.mvp?.id),fmvp=playerById.get(season.finalsMvp?.id);return <article className="year-award-card" key={competition.id}><div className="award-title"><CompetitionEmblem competition={competition} size={42}/><div><small>{competition.name}</small><strong>Season awards</strong></div></div>{mvp&&<button onClick={()=>onPlayer(mvp)}><PlayerPortrait player={mvp} size={58}/><div><small>MVP</small><strong>{mvp.name}</strong><span>{mvp.teamName} · {mvp.current} OVR</span></div></button>}{fmvp&&fmvp.id!==mvp?.id&&<button onClick={()=>onPlayer(fmvp)}><PlayerPortrait player={fmvp} size={58}/><div><small>{competition.id==='nba'?'FINALS MVP':'PLAYOFF / FINALS MVP'}</small><strong>{fmvp.name}</strong><span>{fmvp.teamName}</span></div></button>}<div className="best-five-mini">{Object.entries(season.allLeagueFive??{}).map(([pos,row])=><button key={pos} onClick={()=>row?.id&&onPlayer(row.id)}><span>{pos}</span><strong>{row?.name??'—'}</strong></button>)}</div></article>})}</div>}
+    {chapter===2&&<div className="chronicle-story-grid">{stories.map((story)=><StoryCard key={story.key} story={story} onPlayer={onPlayer} onTeam={onTeam}/>)}{!stories.length&&<div className="empty-state">A quiet year by Chronicle standards — no truly iconic story cleared the threshold.</div>}</div>}
+    {chapter===3&&<><div className="section-header light-section"><h3>The next generation</h3><span>Highest-ceiling players age 22 or younger</span></div><div className="future-grid">{prospects.map((player)=><button key={player.id} className={`future-card rarity-surface-${player.rarity.toLowerCase()}`} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} size={78}/><div><Rarity value={player.rarity}/><strong>{player.name}</strong><span>{player.age} · {player.position} · {player.teamName}</span><small>Base {player.base} · Current {player.current}</small></div></button>)}</div></>}
+    {chapter===4&&<div className="legacy-year-grid"><article><h3>Hall of Fame</h3><p>{(legacy?.nbaInductions?.length??0)} NBA · {(legacy?.fibaInductions?.length??0)} FIBA inductions recorded this year.</p>{[...(legacy?.nbaInductions??[]),...(legacy?.fibaInductions??[])].map((entry)=><button key={`${entry.hall}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><strong>{entry.player}</strong><span>{entry.hall} Hall · legacy {entry.score}</span></button>)}</article><article><h3>Retired jerseys</h3><p>Only extraordinary team-specific careers qualify.</p>{(legacy?.jerseyRetirements??[]).map((entry)=><button key={`${entry.teamId}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><strong>#{entry.number} · {entry.player}</strong><span>{entry.team}</span></button>)}</article><article><h3>Career farewells</h3>{(universe.retirements??[]).filter((r)=>Number(r.year)===Number(year)).slice(0,10).map((r)=><button key={r.playerId} onClick={()=>onPlayer(r.playerId)}><strong>{r.player}</strong><span>{r.rarity} · {r.age} · {r.honors} honors</span></button>)}{!(universe.retirements??[]).some((r)=>Number(r.year)===Number(year))&&<p>Retirements are revealed in the first offseason stage.</p>}</article></div>}
+    <div className="year-end-actions"><button className="button subtle" onClick={()=>setOpen(false)}>Browse world</button>{chapter>0&&<button className="button" onClick={()=>setChapter(chapter-1)}>← Previous</button>}{chapter<chapters.length-1?<button className="button primary" onClick={()=>setChapter(chapter+1)}>Next chapter →</button>:<button className="button primary year-end-start" onClick={onStartOffseason}>Begin offseason →</button>}</div>
+  </section>;
+}
+function StartingFiveCourt({team,universe,onPlayer}) {
+  const five=startingFiveFor(team,universe); return <section className="panel starting-five-panel"><SectionHeader title="Starting five" note="Best current player at each basketball position"/><div className="basketball-court"><div className="court-line center-line"/><div className="court-circle"/>{five.map((player,index)=><button key={player.id} className={`court-player court-pos-${player.position.toLowerCase()} rarity-surface-${player.rarity.toLowerCase()}`} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} team={team} size={66}/><span>{player.position}</span><strong>{player.name}</strong><small>{player.current} OVR</small></button>)}</div></section>;
+}
+function OffseasonStageSpotlight({universe,onPlayer,onTeam,onCoach}) {
+  if(!universe.offseason?.active)return null; const idx=universe.offseason.stageIndex; const year=universe.offseason.year; const players=allUniversePlayers(universe); const playerById=new Map(players.map((p)=>[p.id,p]));
+  const retirements=(universe.retirements??[]).filter((r)=>Number(r.year)===Number(year)).slice(0,8); const legacy=(universe.legacyHistory??[]).find((row)=>Number(row.year)===Number(year)); const draft=(universe.draftHistory??[]).find((d)=>Number(d.year)===Number(year)); const moves=(universe.transactions??[]).filter((t)=>Number(t.year)===Number(year)); const trades=moves.filter((t)=>t.type==='NBA trade').slice(0,10); const signings=moves.filter((t)=>t.type==='Free-agent signing').sort((a,b)=>(playerById.get(b.playerId)?.current??0)-(playerById.get(a.playerId)?.current??0)).slice(0,10); const coachMoves=(universe.coachTransactions??[]).filter((t)=>Number(t.year)===Number(year)).slice(0,8);
+  return <section className="offseason-live-center"><div className="offseason-live-head"><div><div className="kicker light">Offseason Live · {year}</div><h2>{OFFSEASON_STAGES[idx]}</h2><p>The market is an event: preserve cores, find opportunities, and watch the balance of power move.</p></div><span className="offseason-stage-number">{idx+1}/{OFFSEASON_STAGES.length}</span></div><div className="offseason-stage-strip">{OFFSEASON_STAGES.map((stage,i)=><div key={stage} className={i<idx?'done':i===idx?'active':''}><span>{i+1}</span><small>{stage}</small></div>)}</div>
+    {idx>=1&&retirements.length>0&&<div className="offseason-reveal"><h3>Farewells just announced</h3><div className="reveal-row">{retirements.map((r)=>{const p=playerById.get(r.playerId);return <button key={r.playerId} onClick={()=>onPlayer(r.playerId)}>{p&&<PlayerPortrait player={p} size={54}/>}<div><Rarity value={r.rarity}/><strong>{r.player}</strong><span>{r.age} · {r.honors} honors</span><small>{p?careerVerdict(p):''}</small></div></button>})}</div></div>}
+    {idx>=1&&((legacy?.nbaInductions?.length??0)+(legacy?.fibaInductions?.length??0)+(legacy?.jerseyRetirements?.length??0)>0)&&<div className="legacy-ceremony-reveal"><div><h3>★ Hall of Fame class</h3>{[...(legacy?.nbaInductions??[]),...(legacy?.fibaInductions??[])].map((entry)=><button key={`${entry.hall}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><strong>{entry.player}</strong><span>{entry.hall} Hall of Fame · legacy {entry.score}</span><small>{entry.summary?`${entry.summary.titles} titles · ${entry.summary.mvps+entry.summary.finalsMvps} major MVPs · ${entry.summary.firstFive} Best Five`:'Completed Hall of Fame résumé'}</small></button>)}</div><div><h3>🎽 Numbers to the rafters</h3>{(legacy?.jerseyRetirements??[]).map((entry)=><button key={`${entry.teamId}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><strong>#{entry.number} · {entry.player}</strong><span>{entry.team}</span><small>{entry.seasons} seasons · {entry.titles} titles · {entry.mvps+Number(entry.finalsMvps??0)} major MVPs · {entry.firstFive} Best Five</small></button>)}</div></div>}
+    {idx>=2&&draft&&<div className="offseason-reveal"><h3>Draft board · top selections</h3><div className="draft-broadcast-row">{(draft.picks??[]).slice(0,10).map((pick)=>{const p=playerById.get(pick.playerId);const team=universe.teams.find((t)=>t.id===pick.teamId);return <button key={pick.pick} onClick={()=>p&&onPlayer(p)}><span className="pick-no">#{pick.pick}</span>{p&&<PlayerPortrait player={p} team={team} size={56}/>}<div><strong>{pick.player}</strong><small><Rarity value={p?.rarity??pick.rarity}/></small><span>{pick.team} · Base {p?.base??'—'} · OVR {p?.current??'—'}</span></div></button>})}</div></div>}
+    {idx>=3&&trades.length>0&&<div className="offseason-reveal"><h3>Trade window headlines</h3><div className="reveal-list">{trades.map((t,i)=><button key={`${t.playerId}-${i}`} onClick={()=>onPlayer(t.playerId)}><strong>{t.player}</strong><span>{t.from} → {t.to}</span><em>{playerById.get(t.playerId)?.current??'—'} OVR</em></button>)}</div></div>}
+    {idx>=4&&<div className="offseason-reveal-grid"><div><h3>Best free-agent signings</h3><div className="reveal-list">{signings.slice(0,6).map((t,i)=><button key={`${t.playerId}-${i}`} onClick={()=>onPlayer(t.playerId)}><strong>{t.player}</strong><span>{t.to}</span><em>{playerById.get(t.playerId)?.current??'—'} OVR</em></button>)}</div></div><div><h3>Coaching carousel</h3><div className="reveal-list">{coachMoves.slice(0,6).map((t,i)=><button key={`${t.coachId}-${i}`} onClick={()=>onCoach(t.coachId)}><strong>{t.coach}</strong><span>{t.from??'Market'} → {t.to??'New job'}</span><em>{t.current??'—'} OVR</em></button>)}</div></div></div>}
+  </section>;
+}
 
 function SeasonPresentationSetup({ universe, onConfirm }) {
   const [config, setConfig] = useState({ ...DEFAULT_PRESENTATION_CONFIG, ...(universe.presentation?.config ?? {}) });
@@ -396,17 +518,342 @@ function livePeriodScore(game, tick, periodIndex) {
   return { a:endEntry.scoreA-before.scoreA, b:endEntry.scoreB-before.scoreB, complete:tick>=(periodIndex+1)*length };
 }
 
+function gameSnapshot(game,tick){
+  const entries=game.timeline.slice(0,Math.max(0,tick));
+  let largestA=0, largestB=0, leadChanges=0, lastSign=0;
+  entries.forEach((entry)=>{
+    const diff=entry.scoreA-entry.scoreB;
+    largestA=Math.max(largestA,diff);
+    largestB=Math.max(largestB,-diff);
+    const sign=Math.sign(diff);
+    if(sign&&lastSign&&sign!==lastSign) leadChanges+=1;
+    if(sign) lastSign=sign;
+  });
+  const current=entries.at(-1)??{scoreA:0,scoreB:0};
+  let runA=0,runB=0;
+  for(let i=entries.length-1;i>=0&&i>=entries.length-6;i-=1){
+    runA+=entries[i].deltaA??0; runB+=entries[i].deltaB??0;
+  }
+  return {largestA,largestB,leadChanges,runA,runB,current};
+}
+
+function livePlayerStats(rows, tick, totalTicks, currentTeamScore, finalTeamScore){
+  const progress=Math.max(0,Math.min(1,tick/Math.max(1,totalTicks)));
+  const scoreProgress=Math.max(0,Math.min(1,currentTeamScore/Math.max(1,finalTeamScore)));
+  return rows.map((row)=>({
+    ...row,
+    livePoints:Math.min(row.points,Math.floor(row.points*scoreProgress)),
+    liveRebounds:Math.min(row.rebounds,Math.floor(row.rebounds*progress)),
+    liveAssists:Math.min(row.assists,Math.floor(row.assists*progress)),
+    liveSteals:Math.min(row.steals,Math.floor(row.steals*progress)),
+    liveBlocks:Math.min(row.blocks,Math.floor(row.blocks*progress)),
+  }));
+}
+
+function KeyMoment({game,tick}){
+  if(!tick) return <div className="moment-callout neutral"><span>TIP-OFF</span><strong>Everything starts at zero.</strong></div>;
+  const current=game.timeline[Math.min(tick,game.timeline.length)-1];
+  const previous=tick>1?game.timeline[tick-2]:{scoreA:0,scoreB:0};
+  const last=Math.sign(previous.scoreA-previous.scoreB);
+  const now=Math.sign(current.scoreA-current.scoreB);
+  const snap=gameSnapshot(game,tick);
+  let label='GAME FLOW', copy=`${Math.abs(current.scoreA-current.scoreB)}-point ${current.scoreA===current.scoreB?'tie':current.scoreA>current.scoreB?`${game.teamA} lead`:`${game.teamB} lead`}`;
+  let tone='neutral';
+  if(current.scoreA===current.scoreB){label='TIE GAME';copy=`${current.scoreA}–${current.scoreB}`;tone='tie';}
+  else if(last&&now&&last!==now){label='LEAD CHANGE';copy=`${now>0?game.teamA:game.teamB} takes control`;tone=now>0?'team-a':'team-b';}
+  else if(current.deltaA>=3&&current.deltaA>current.deltaB){label=current.deltaA>=5?'BIG MINUTE':'THREE / BURST';copy=`+${current.deltaA} ${game.teamA}`;tone='team-a';}
+  else if(current.deltaB>=3&&current.deltaB>current.deltaA){label=current.deltaB>=5?'BIG MINUTE':'THREE / BURST';copy=`+${current.deltaB} ${game.teamB}`;tone='team-b';}
+  else if(snap.runA>=9&&snap.runA-snap.runB>=7){label='RUN';copy=`${game.teamA} ${snap.runA}–${snap.runB} over the last few minutes`;tone='team-a';}
+  else if(snap.runB>=9&&snap.runB-snap.runA>=7){label='RUN';copy=`${game.teamB} ${snap.runB}–${snap.runA} over the last few minutes`;tone='team-b';}
+  else if(current.remaining<=2){label='CRUNCH TIME';copy=`${Math.abs(current.scoreA-current.scoreB)}-point game`;tone='clutch';}
+  return <div key={`${game.id}-${tick}-${label}`} className={`moment-callout ${tone}`}><span>{label}</span><strong>{copy}</strong></div>;
+}
+
+function MomentumChart({game,tick}){
+  const width=780,height=245,padX=34,padY=30;
+  const visible=[{scoreA:0,scoreB:0},...game.timeline.slice(0,Math.max(0,tick))];
+  const allDiffs=game.timeline.map((entry)=>entry.scoreA-entry.scoreB);
+  const maxAbs=Math.max(8,...allDiffs.map((value)=>Math.abs(value)));
+  const x=(i)=>padX+(i/Math.max(1,game.timeline.length))*(width-padX*2);
+  const y=(diff)=>height/2-(diff/maxAbs)*(height/2-padY);
+  const points=visible.map((entry,i)=>`${x(i)},${y(entry.scoreA-entry.scoreB)}`).join(' ');
+  const currentDiff=visible.at(-1).scoreA-visible.at(-1).scoreB;
+  const zeroY=y(0);
+  return <section className="momentum-card panel">
+    <div className="momentum-head"><div><span className="kicker">LIVE MOMENTUM</span><strong>{currentDiff===0?'Even game':`${currentDiff>0?game.teamA:game.teamB} +${Math.abs(currentDiff)}`}</strong></div><div className="momentum-legend"><span className="team-a-dot"/>{game.teamA}<span className="team-b-dot"/>{game.teamB}</div></div>
+    <svg className="momentum-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Score differential over game time. Positive favors ${game.teamA}; negative favors ${game.teamB}.`}>
+      <defs><linearGradient id={`leadFill-${game.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2d67c7" stopOpacity=".28"/><stop offset="50%" stopColor="#2d67c7" stopOpacity=".04"/><stop offset="50%" stopColor="#b23b52" stopOpacity=".04"/><stop offset="100%" stopColor="#b23b52" stopOpacity=".28"/></linearGradient></defs>
+      <rect x={padX} y={padY} width={width-padX*2} height={height-padY*2} rx="12" fill={`url(#leadFill-${game.id})`}/>
+      {[.25,.5,.75].map((ratio)=><line key={ratio} x1={padX} x2={width-padX} y1={padY+(height-padY*2)*ratio} y2={padY+(height-padY*2)*ratio} stroke="rgba(100,116,139,.18)" strokeDasharray="4 6"/>)}
+      <line x1={padX} x2={width-padX} y1={zeroY} y2={zeroY} stroke="#64748b" strokeWidth="1.4"/>
+      <polyline points={points} fill="none" stroke="#172f50" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round"/>
+      {visible.length>1&&<circle cx={x(visible.length-1)} cy={y(currentDiff)} r="7" fill={currentDiff>=0?'#2d67c7':'#b23b52'} stroke="white" strokeWidth="3"/>}
+      <text x={padX+6} y={padY+16} fill="#2d67c7" fontSize="13" fontWeight="800">+ {game.teamA}</text>
+      <text x={padX+6} y={height-padY-8} fill="#b23b52" fontSize="13" fontWeight="800">− {game.teamB}</text>
+      <text x={width-padX-6} y={zeroY-7} textAnchor="end" fill="#64748b" fontSize="11">TIED</text>
+    </svg>
+    <div className="chart-time-row"><span>TIP</span><span>GAME TIME →</span><span>FINAL</span></div>
+  </section>;
+}
+
+function LiveLeaderTable({title,rows,metric,onPlayer}){
+  const sorted=[...rows].sort((a,b)=>b[metric]-a[metric]||b.livePoints-a.livePoints).slice(0,3);
+  const labels={livePoints:'PTS',liveRebounds:'REB',liveAssists:'AST'};
+  return <section className="live-leader-card">
+    <div className="live-leader-title"><span>{title}</span><b>{labels[metric]}</b></div>
+    {sorted.map((row,index)=><button key={row.playerId} onClick={()=>onPlayer(row.playerId)}>
+      <span className="leader-rank">{index+1}</span>
+      <PlayerPortrait player={{...row,name:row.player}} size={38}/>
+      <span className="leader-name"><strong>{row.player}</strong><small>{row.position} · {row.current} OVR</small></span>
+      <b>{row[metric]}</b>
+    </button>)}
+  </section>;
+}
+
+function VictoryCeremony({game,onPlayer}){
+  const winnerA=game.scoreA>game.scoreB;
+  const winner=winnerA?game.teamA:game.teamB;
+  const loser=winnerA?game.teamB:game.teamA;
+  const winnerScore=winnerA?game.scoreA:game.scoreB;
+  const loserScore=winnerA?game.scoreB:game.scoreA;
+  const mvpRow=[...game.boxA,...game.boxB].find((row)=>row.playerId===game.mvp.playerId);
+  const championship=Boolean(game.isChampionshipClincher);
+  const clincher=Boolean(game.isSeriesClincher);
+  return <section className={`victory-ceremony ${championship?'championship-night':''}`}>
+    <div className="confetti-field" aria-hidden="true">{Array.from({length:26},(_,i)=><i key={i} style={{'--i':i}}/>)}</div>
+    <div className="victory-kicker">{championship?'CHAMPIONS':clincher?'SERIES WON':'FINAL'}</div>
+    <div className="victory-team"><TeamBadge team={{name:winner,color:winnerA?(game.teamAColor||'#315d9b'):(game.teamBColor||'#b43843')}} size={104}/><div><span>{championship?'WORLD / LEAGUE CHAMPION':clincher?'ADVANCES':'VICTORY'}</span><h2>{winner}</h2><p>{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</p></div></div>
+    <div className="victory-score"><strong>{winnerScore}</strong><span>FINAL</span><strong>{loserScore}</strong><small>{loser}</small></div>
+    <button className="victory-mvp" onClick={()=>onPlayer(game.mvp.playerId)}>
+      <PlayerPortrait player={{...mvpRow,name:game.mvp.player,rarity:mvpRow?.rarity||'Rare',position:mvpRow?.position||'—'}} size={94}/>
+      <div><span>GAME MVP</span><strong>{game.mvp.player}</strong><small>{game.mvp.team}</small><p><b>{game.mvp.points}</b> PTS · <b>{game.mvp.rebounds}</b> REB · <b>{game.mvp.assists}</b> AST · {game.mvp.steals} STL · {game.mvp.blocks} BLK</p></div>
+    </button>
+  </section>;
+}
+
+
+function allocateLiveStat(rows, key, targetTotal) {
+  const target = Math.max(0, Math.round(targetTotal || 0));
+  if (!rows.length || target === 0) return rows.map(() => 0);
+  const finalValues = rows.map((row) => Math.max(0, Number(row[key]) || 0));
+  const finalTotal = finalValues.reduce((sum, value) => sum + value, 0);
+  if (!finalTotal) return rows.map(() => 0);
+  const raw = finalValues.map((value) => target * value / finalTotal);
+  const values = raw.map((value) => Math.floor(value));
+  let remaining = target - values.reduce((sum, value) => sum + value, 0);
+  const order = raw.map((value, index) => ({ index, fraction: value - Math.floor(value), strength: Number(rows[index].current) || 0 }))
+    .sort((a, b) => b.fraction - a.fraction || b.strength - a.strength || a.index - b.index);
+  for (let i = 0; i < remaining; i += 1) values[order[i % order.length].index] += 1;
+  return values;
+}
+
+function liveBoxRows(rows, tick, totalTicks, liveScore) {
+  const ratio = totalTicks ? Math.max(0, Math.min(1, tick / totalTicks)) : 0;
+  const pts = allocateLiveStat(rows, 'points', liveScore);
+  const oreb = allocateLiveStat(rows, 'orpg', Math.round(rows.reduce((sum,row)=>sum+(row.orpg||0),0) * ratio));
+  const dreb = allocateLiveStat(rows, 'drpg', Math.round(rows.reduce((sum,row)=>sum+(row.drpg||0),0) * ratio));
+  const ast = allocateLiveStat(rows, 'assists', Math.round(rows.reduce((sum,row)=>sum+(row.assists||0),0) * ratio));
+  const stl = allocateLiveStat(rows, 'steals', Math.round(rows.reduce((sum,row)=>sum+(row.steals||0),0) * ratio));
+  const blk = allocateLiveStat(rows, 'blocks', Math.round(rows.reduce((sum,row)=>sum+(row.blocks||0),0) * ratio));
+  return rows.map((row,index)=>({
+    ...row,
+    points:pts[index],
+    orpg:oreb[index],
+    drpg:dreb[index],
+    rebounds:oreb[index]+dreb[index],
+    assists:ast[index],
+    steals:stl[index],
+    blocks:blk[index],
+  }));
+}
+
+function gameFlowFacts(game, tick) {
+  const entries = game.timeline.slice(0, tick);
+  let largestA = 0, largestB = 0, leadChanges = 0, ties = 0, previousSign = 0;
+  let priorLeadForTie = 0;
+  for (const entry of entries) {
+    const lead = entry.scoreA - entry.scoreB;
+    largestA = Math.max(largestA, lead);
+    largestB = Math.max(largestB, -lead);
+    const sign = Math.sign(lead);
+    if (lead === 0 && priorLeadForTie !== 0) ties += 1;
+    if (sign && previousSign && sign !== previousSign) leadChanges += 1;
+    if (sign) previousSign = sign;
+    priorLeadForTie = lead;
+  }
+  const current = tick ? entries[entries.length - 1] : { scoreA:0, scoreB:0, deltaA:0, deltaB:0 };
+  const windowSize = 4;
+  const windowStart = Math.max(0, tick - windowSize);
+  const before = windowStart > 0 ? game.timeline[windowStart - 1] : { scoreA:0, scoreB:0 };
+  const runA = current.scoreA - before.scoreA;
+  const runB = current.scoreB - before.scoreB;
+  const priorCurrent = tick > 1 ? game.timeline[tick - 2] : { scoreA:0, scoreB:0 };
+  const priorWindowStart = Math.max(0, tick - 1 - windowSize);
+  const priorBefore = priorWindowStart > 0 ? game.timeline[priorWindowStart - 1] : { scoreA:0, scoreB:0 };
+  const priorRunA = priorCurrent.scoreA - priorBefore.scoreA;
+  const priorRunB = priorCurrent.scoreB - priorBefore.scoreB;
+  const currentLead = current.scoreA - current.scoreB;
+  const previous = tick > 1 ? game.timeline[tick - 2] : { scoreA:0, scoreB:0 };
+  const previousLead = previous.scoreA - previous.scoreB;
+  let moment = null;
+  if (tick) {
+    if (currentLead === 0 && previousLead !== 0) moment = { type:'tie', label:'TIE GAME' };
+    else if (Math.sign(currentLead) && Math.sign(previousLead) && Math.sign(currentLead)!==Math.sign(previousLead)) moment = { type:'lead', label:'LEAD CHANGE' };
+    else if (tick >= game.timeline.length - 5 && Math.abs(currentLead) <= 3) moment = { type:'clutch', label:'CLUTCH TIME' };
+    else if (runA >= 7 && runA-runB >= 5 && !(priorRunA >= 7 && priorRunA-priorRunB >= 5)) moment = { type:'run-a', label:`${runA}–${runB} RUN`, team:game.teamA };
+    else if (runB >= 7 && runB-runA >= 5 && !(priorRunB >= 7 && priorRunB-priorRunA >= 5)) moment = { type:'run-b', label:`${runB}–${runA} RUN`, team:game.teamB };
+    else if (Math.abs(currentLead) >= 15 && Math.abs(previousLead) < 15) moment = { type:'surge', label:'15-POINT LEAD', team:currentLead>0?game.teamA:game.teamB };
+  }
+  return { largestA, largestB, leadChanges, ties, runA, runB, currentLead, moment, current };
+}
+
+function LeadChart({ game, tick }) {
+  const entries = [{scoreA:0,scoreB:0}, ...game.timeline.slice(0,tick)];
+  const fullLeads = game.timeline.map((entry)=>entry.scoreA-entry.scoreB);
+  const maxAbs = Math.max(10, ...fullLeads.map((value)=>Math.abs(value)));
+  const scale = Math.ceil(maxAbs / 5) * 5;
+  const width=760, height=230, padX=34, padY=25, mid=height/2;
+  const x = (index) => padX + (width-padX*2) * (index / Math.max(1,game.timeline.length));
+  const y = (lead) => mid - (lead / scale) * (mid-padY);
+  const points = entries.map((entry,index)=>`${x(index)},${y(entry.scoreA-entry.scoreB)}`).join(' ');
+  const currentLead = entries[entries.length-1].scoreA-entries[entries.length-1].scoreB;
+  const currentX=x(entries.length-1), currentY=y(currentLead);
+  return <div className="lead-chart-wrap">
+    <div className="lead-chart-label top"><span>{game.teamA}</span><strong>+{scale}</strong></div>
+    <svg className="lead-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Lead chart for ${game.teamA} versus ${game.teamB}`}>
+      <defs>
+        <linearGradient id={`lead-bg-${game.id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={game.teamAColor||'#315d9b'} stopOpacity=".14"/>
+          <stop offset="49%" stopColor={game.teamAColor||'#315d9b'} stopOpacity=".03"/>
+          <stop offset="51%" stopColor={game.teamBColor||'#b43843'} stopOpacity=".03"/>
+          <stop offset="100%" stopColor={game.teamBColor||'#b43843'} stopOpacity=".14"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width={width} height={height} rx="16" fill={`url(#lead-bg-${game.id})`}/>
+      {[.25,.5,.75].map((fraction)=><line key={fraction} x1={padX} x2={width-padX} y1={height*fraction} y2={height*fraction} stroke="rgba(100,116,139,.14)" strokeDasharray="5 6"/>)}
+      <line x1={padX} x2={width-padX} y1={mid} y2={mid} stroke="rgba(15,23,42,.38)" strokeWidth="1.5"/>
+      <polyline points={points} fill="none" stroke="#132238" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round"/>
+      {entries.slice(1).map((entry,index)=>{
+        const lead=entry.scoreA-entry.scoreB;
+        if(index!==entries.length-2 && index%4!==0) return null;
+        return <circle key={index} cx={x(index+1)} cy={y(lead)} r={index===entries.length-2?6:3.1} fill={lead>=0?(game.teamAColor||'#315d9b'):(game.teamBColor||'#b43843')} stroke="white" strokeWidth={index===entries.length-2?2.5:1.4}/>;
+      })}
+      <circle cx={currentX} cy={currentY} r="9" fill="none" stroke={currentLead>=0?(game.teamAColor||'#315d9b'):(game.teamBColor||'#b43843')} strokeOpacity=".28" strokeWidth="5"/>
+      <text x={padX} y={height-7} fontSize="11" fill="#718096">0</text>
+      <text x={width/2} y={height-7} textAnchor="middle" fontSize="11" fill="#718096">{Math.floor(game.timeline.length/2)} min</text>
+      <text x={width-padX} y={height-7} textAnchor="end" fontSize="11" fill="#718096">{game.timeline.length} min</text>
+    </svg>
+    <div className="lead-chart-label bottom"><span>{game.teamB}</span><strong>−{scale}</strong></div>
+  </div>;
+}
+
+function LiveGameLeaders({ game, tick, current }) {
+  const liveA = liveBoxRows(game.boxA,tick,game.timeline.length,current.scoreA).map((row)=>({...row,team:game.teamA,color:game.teamAColor}));
+  const liveB = liveBoxRows(game.boxB,tick,game.timeline.length,current.scoreB).map((row)=>({...row,team:game.teamB,color:game.teamBColor}));
+  const all=[...liveA,...liveB];
+  const groups=[
+    {key:'points',label:'Top scorers',suffix:'PTS'},
+    {key:'rebounds',label:'Top rebounders',suffix:'REB'},
+    {key:'assists',label:'Top playmakers',suffix:'AST'},
+  ];
+  return <section className="live-leaders panel">
+    <div className="section-header compact"><div><div className="kicker">LIVE LEADERS</div><h3>Who is driving the game?</h3></div></div>
+    <div className="leader-columns">{groups.map((group)=>{
+      const leaders=[...all].sort((a,b)=>b[group.key]-a[group.key] || b.current-a.current).slice(0,3);
+      return <article key={group.key}><h4>{group.label}</h4>{leaders.map((row,index)=><div className="live-leader-row" key={`${group.key}-${row.playerId}`}><span className="leader-rank">{index+1}</span><span className="team-dot" style={{background:row.color||'#64748b'}}/><div><strong>{row.player}</strong><small>{row.team}</small></div><b>{row[group.key]} <small>{group.suffix}</small></b></div>)}</article>;
+    })}</div>
+  </section>;
+}
+
+function MomentumPanel({ game, tick }) {
+  const facts=gameFlowFacts(game,tick);
+  const momentum=Math.max(-18,Math.min(18,facts.runA-facts.runB));
+  const aWidth=momentum>0?Math.min(50,Math.abs(momentum)/18*50):0;
+  const bWidth=momentum<0?Math.min(50,Math.abs(momentum)/18*50):0;
+  return <section className="panel momentum-panel">
+    <div className="momentum-head"><div><div className="kicker">GAME FLOW</div><h3>Lead & momentum</h3></div><div className={`lead-now ${facts.currentLead===0?'even':facts.currentLead>0?'team-a':'team-b'}`}>{facts.currentLead===0?'EVEN':`${facts.currentLead>0?game.teamA:game.teamB} +${Math.abs(facts.currentLead)}`}</div></div>
+    <LeadChart game={game} tick={tick}/>
+    <div className="momentum-meter">
+      <div className="momentum-name">{game.teamA}</div>
+      <div className="momentum-track"><span className="momentum-a" style={{width:`${aWidth}%`,background:game.teamAColor||'#315d9b'}}/><i/><span className="momentum-b" style={{width:`${bWidth}%`,background:game.teamBColor||'#b43843'}}/></div>
+      <div className="momentum-name right">{game.teamB}</div>
+    </div>
+    <div className="flow-facts"><span><b>{facts.largestA}</b> largest {game.teamA} lead</span><span><b>{facts.leadChanges}</b> lead changes</span><span><b>{facts.ties}</b> ties</span><span><b>{facts.largestB}</b> largest {game.teamB} lead</span></div>
+  </section>;
+}
+
+function FinalResultView({ game, index, total, onNext, onPlayer, onClose }) {
+  const winnerA=game.winnerId===game.teamAId;
+  const winnerName=winnerA?game.teamA:game.teamB;
+  const loserName=winnerA?game.teamB:game.teamA;
+  const winnerColor=winnerA?(game.teamAColor||'#315d9b'):(game.teamBColor||'#b43843');
+  const loserColor=winnerA?(game.teamBColor||'#b43843'):(game.teamAColor||'#315d9b');
+  const winnerScore=winnerA?game.scoreA:game.scoreB, loserScore=winnerA?game.scoreB:game.scoreA;
+  const mvpRow=[...game.boxA,...game.boxB].find((row)=>row.playerId===game.mvp.playerId);
+  const title=game.isChampionshipClincher?'CHAMPIONS':game.isSeriesClincher||game.advances?'ADVANCES':'GAME WINNER';
+  return <div className="showcase-page final-showcase">
+    <section className="finale-stage" style={{'--winner-color':winnerColor,'--loser-color':loserColor}}>
+      <div className="confetti-layer" aria-hidden="true">{Array.from({length:28},(_,i)=><i key={i} style={{'--i':i}}/>)}</div>
+      <div className="finale-kicker">{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</div>
+      <div className="finale-title">{title}</div>
+      <TeamBadge team={{name:winnerName,color:winnerColor}} size={132}/>
+      <h1>{winnerName}</h1>
+      <div className="final-score-line"><strong>{winnerScore}</strong><span>FINAL</span><strong>{loserScore}</strong></div>
+      <div className="final-opponent">over {loserName}</div>
+      {game.seriesWinsA!=null&&<div className="series-final">Series: {game.teamA} {game.seriesWinsA}–{game.seriesWinsB} {game.teamB}</div>}
+      <div className="finale-actions"><button className="button final-primary" onClick={onNext}>{index+1<total?'Next game':'Continue to Year Review'}</button><button className="button final-secondary" onClick={onClose}>Browse world</button></div>
+    </section>
+    <section className="final-mvp-stage panel">
+      <div className="final-mvp-copy"><div className="kicker">GAME MVP</div><h2>{game.mvp.player}</h2><p>{game.mvp.team} · the defining performance of the night</p><div className="final-mvp-stats"><b>{game.mvp.points}<small>PTS</small></b><b>{game.mvp.rebounds}<small>REB</small></b><b>{game.mvp.assists}<small>AST</small></b><b>{game.mvp.steals}<small>STL</small></b><b>{game.mvp.blocks}<small>BLK</small></b></div></div>
+      <button className="mvp-portrait-button" onClick={()=>onPlayer(game.mvp.playerId)}><PlayerPortrait player={{...mvpRow,name:game.mvp.player,rarity:mvpRow?.rarity||'Rare',position:mvpRow?.position||'—'}} size={126}/><span>View career →</span></button>
+    </section>
+    <MomentumPanel game={game} tick={game.timeline.length}/>
+    <LiveGameLeaders game={game} tick={game.timeline.length} current={{scoreA:game.scoreA,scoreB:game.scoreB}}/>
+    <div className="showcase-box-grid"><GameBox team={game.teamA} score={game.scoreA} rows={game.boxA} onPlayer={onPlayer}/><GameBox team={game.teamB} score={game.scoreB} rows={game.boxB} onPlayer={onPlayer}/></div>
+  </div>;
+}
+
 function GameShowcaseView({ game, index, total, onCheckpoint, onSkip, onNext, onPlayer, onClose }) {
-  const [tick, setTick] = useState(game.completedTicks ?? 0); const [playing, setPlaying] = useState(false); const [targetTick, setTargetTick] = useState(null);
-  useEffect(() => { setTick(game.completedTicks ?? 0); setPlaying(false); setTargetTick(null); }, [game.id]);
-  useEffect(() => { if(!playing || targetTick==null) return undefined; const timer=setInterval(()=>setTick((current)=>{ const next=Math.min(current+1,targetTick); if(next>=targetTick){ clearInterval(timer); setPlaying(false); setTargetTick(null); onCheckpoint(next); } return next; }),220); return ()=>clearInterval(timer); },[playing,targetTick,game.id]);
-  const totalTicks=game.timeline.length; const final=tick>=totalTicks; const current=tick>0?game.timeline[Math.min(tick,totalTicks)-1]:{scoreA:0,scoreB:0,period:1,periodLabel:game.periodLabels[0],remaining:game.periodMinutes}; const nextPeriodIndex=Math.min(game.periodLabels.length-1,Math.floor(tick/game.periodMinutes)); const periodEnded=tick>0&&tick%game.periodMinutes===0; const displayStatus=final?'FINAL':periodEnded?`End ${game.periodLabels[Math.max(0,nextPeriodIndex-1)]}`:`${current.periodLabel} · ${current.remaining}:00`; const playNextPeriod=()=>{const target=Math.min(totalTicks,(Math.floor(tick/game.periodMinutes)+1)*game.periodMinutes);setTargetTick(target);setPlaying(true);}; const skip=()=>{setPlaying(false);setTick(totalTicks);onSkip();};
-  const mvpRow=final?[...game.boxA,...game.boxB].find(row=>row.playerId===game.mvp.playerId):null;
-  return <div className="showcase-page"><div className="showcase-meta"><div><div className="kicker">{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</div><h2>Postseason showcase</h2><p>Game {index+1} of {total}. Watch minute by minute, stop after each period, or skip directly to the final box score.</p></div><div className="showcase-actions">{!final&&<><button className="button primary" disabled={playing} onClick={playNextPeriod}>{playing?'Simulating…':`Play ${game.periodLabels[nextPeriodIndex]}`}</button><button className="button" disabled={playing} onClick={skip}>Skip game</button></>}{final&&<button className="button primary" onClick={onNext}>{index+1<total?'Next game':'Continue to Year Review'}</button>}<button className="button subtle dark-text" onClick={onClose}>Browse world</button></div></div>
-    <section className="live-scoreboard panel premium-scoreboard"><div className="showcase-team"><TeamBadge team={{name:game.teamA,color:'#315d9b'}} size={64}/><div><strong>{game.teamA}</strong><span>{current.scoreA}</span></div></div><div className="showcase-clock"><strong>{displayStatus}</strong><small>{game.competition}</small></div><div className="showcase-team away"><TeamBadge team={{name:game.teamB,color:'#b43843'}} size={64}/><div><strong>{game.teamB}</strong><span>{current.scoreB}</span></div></div></section>
-    <section className="period-strip">{game.periodLabels.map((label,periodIndex)=>{const score=livePeriodScore(game,tick,periodIndex);return <article key={label} className={score?.complete?'complete':periodIndex===nextPeriodIndex&&!final?'current':''}><span>{label}</span><strong>{score?`${score.a}–${score.b}`:'—'}</strong></article>;})}</section>
-    {!final&&<section className="panel live-minute-panel"><div className="minute-progress"><span style={{width:`${Math.round(tick/Math.max(1,totalTicks)*100)}%`}}/></div><div className="live-minute-copy"><strong>{playing?'Game running…':'Paused'}</strong><span>{periodEnded&&tick<totalTicks?'Period complete. Continue when ready.':'One simulation tick = one game minute.'}</span></div></section>}
-    {final&&<><section className="panel game-mvp premium-mvp"><div className="kicker">Game MVP</div><button onClick={()=>onPlayer(game.mvp.playerId)}><PlayerPortrait player={{...mvpRow,name:game.mvp.player,rarity:mvpRow?.rarity||'Rare',position:mvpRow?.position||'—'}} size={76}/><div><strong>{game.mvp.player}</strong><span>{game.mvp.team}</span></div></button><div className="mvp-statline"><b>{game.mvp.points} PTS</b><span>{game.mvp.rebounds} REB ({game.mvp.orpg} O / {game.mvp.drpg} D)</span><span>{game.mvp.assists} AST</span><span>{game.mvp.steals} STL</span><span>{game.mvp.blocks} BLK</span></div></section><div className="showcase-box-grid"><GameBox team={game.teamA} score={game.scoreA} rows={game.boxA} onPlayer={onPlayer}/><GameBox team={game.teamB} score={game.scoreB} rows={game.boxB} onPlayer={onPlayer}/></div></>}
+  const [tick, setTick] = useState(game.completedTicks ?? 0);
+  const [playing, setPlaying] = useState(false);
+  const [targetTick, setTargetTick] = useState(null);
+  const [speed, setSpeed] = useState(2);
+  useEffect(() => { setTick(game.completedTicks ?? 0); setPlaying(false); setTargetTick(null); setSpeed(2); }, [game.id]);
+  useEffect(() => {
+    if(!playing || targetTick==null) return undefined;
+    const timer=setInterval(()=>setTick((current)=>{
+      const next=Math.min(current+1,targetTick);
+      if(next>=targetTick){ clearInterval(timer); setPlaying(false); setTargetTick(null); onCheckpoint(next); }
+      return next;
+    }),Math.max(80,Math.round(440/speed)));
+    return ()=>clearInterval(timer);
+  },[playing,targetTick,game.id,speed]);
+  const totalTicks=game.timeline.length;
+  const final=tick>=totalTicks;
+  const current=tick>0?game.timeline[Math.min(tick,totalTicks)-1]:{scoreA:0,scoreB:0,deltaA:0,deltaB:0,period:1,periodLabel:game.periodLabels[0],remaining:game.periodMinutes};
+  if(final) return <FinalResultView game={game} index={index} total={total} onNext={onNext} onPlayer={onPlayer} onClose={onClose}/>;
+  const nextPeriodIndex=Math.min(game.periodLabels.length-1,Math.floor(tick/game.periodMinutes));
+  const periodEnded=tick>0&&tick%game.periodMinutes===0;
+  const displayStatus=periodEnded?`End ${game.periodLabels[Math.max(0,nextPeriodIndex-1)]}`:`${current.periodLabel} · ${current.remaining}:00`;
+  const flow=gameFlowFacts(game,tick);
+  const playNextPeriod=()=>{const target=Math.min(totalTicks,(Math.floor(tick/game.periodMinutes)+1)*game.periodMinutes);setTargetTick(target);setPlaying(true);};
+  const pause=()=>{setPlaying(false);setTargetTick(null);onCheckpoint(tick);};
+  const skip=()=>{setPlaying(false);setTargetTick(null);setTick(totalTicks);onSkip();};
+  const browse=()=>{if(playing) pause(); else onCheckpoint(tick); onClose();};
+  const scoringPopA=current.deltaA>0;
+  const scoringPopB=current.deltaB>0;
+  return <div className="showcase-page">
+    <div className="showcase-meta"><div><div className="kicker">{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</div><h2>Live showcase</h2><p>Watch the shape of the game change minute by minute. The chart, leaders and momentum all update together.</p></div><div className="showcase-actions">{!playing?<button className="button primary" onClick={playNextPeriod}>{`Play ${game.periodLabels[nextPeriodIndex]}`}</button>:<button className="button primary pause-button" onClick={pause}>Pause</button>}<button className="button" disabled={playing} onClick={skip}>Skip to final</button><button className="button subtle dark-text" onClick={browse}>Browse world</button></div></div>
+    <section className="live-scoreboard panel premium-scoreboard visual-scoreboard" style={{'--team-a':game.teamAColor||'#315d9b','--team-b':game.teamBColor||'#b43843'}}>
+      <div className="showcase-team"><TeamBadge team={{name:game.teamA,color:game.teamAColor||'#315d9b'}} size={70}/><div><strong>{game.teamA}</strong><span>{current.scoreA}</span></div>{scoringPopA&&<em className="score-pop score-pop-a" key={`a-${tick}`}>+{current.deltaA}</em>}</div>
+      <div className="showcase-clock"><strong>{displayStatus}</strong><small>{game.competition}</small><div className="speed-controls"><span>Speed</span>{[1,2,4].map((value)=><button key={value} className={speed===value?'active':''} onClick={()=>setSpeed(value)}>{value}×</button>)}</div></div>
+      <div className="showcase-team away"><TeamBadge team={{name:game.teamB,color:game.teamBColor||'#b43843'}} size={70}/><div><strong>{game.teamB}</strong><span>{current.scoreB}</span></div>{scoringPopB&&<em className="score-pop score-pop-b" key={`b-${tick}`}>+{current.deltaB}</em>}</div>
+      {flow.moment&&<div className={`moment-pop ${flow.moment.type}`} key={`${flow.moment.type}-${tick}`}><span>{flow.moment.team||'KEY MOMENT'}</span><strong>{flow.moment.label}</strong></div>}
+    </section>
+    <section className="period-strip">{game.periodLabels.map((label,periodIndex)=>{const score=livePeriodScore(game,tick,periodIndex);return <article key={label} className={score?.complete?'complete':periodIndex===nextPeriodIndex?'current':''}><span>{label}</span><strong>{score?`${score.a}–${score.b}`:'—'}</strong></article>;})}</section>
+    <MomentumPanel game={game} tick={tick}/>
+    <LiveGameLeaders game={game} tick={tick} current={current}/>
+    <section className="panel live-minute-panel"><div className="minute-progress"><span style={{width:`${Math.round(tick/Math.max(1,totalTicks)*100)}%`}}/></div><div className="live-minute-copy"><strong>{playing?`Running at ${speed}×`:'Paused'}</strong><span>{periodEnded&&tick<totalTicks?'Period complete. Take a look at the game flow before continuing.':'Each tick advances one game minute.'}</span></div></section>
   </div>;
 }
 
@@ -416,7 +863,7 @@ function GameBox({ team, score, rows, onPlayer }) {
 
 function SaveHome({ slots, onContinue, onNew, onDelete, status }) {
   const rows = [1, 2, 3].map((slot) => ({ slot, record: slots.find((item) => item.slot === slot) }));
-  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 9.8 && <small className="legacy-save-note">Older world: playable. v0.9.8 adds packaged portrait assets, official-logo fetching and unlocked showcase navigation.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
+  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 11 && <small className="legacy-save-note">Older world: playable. v1.0 adds the Nexus-style simulation, year-end, offseason event and Chronicle presentation.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
 }
 
 
@@ -492,7 +939,7 @@ function NationalTeamPage({ team, universe, onBack, onPlayer, onCoach, onCompeti
     {tab==='Roster'&&<div className="two-column"><section className="panel"><SectionHeader title="Selected squad" note={team.selectionCompetition ?? 'International window'}/><PlayerTable players={roster} onPlayer={onPlayer} compact/></section><section className="panel"><SectionHeader title="National-team leadership" note="Current cycle"/><InfoLine label="Head coach" value={coach?<LinkButton onClick={()=>onCoach(coach.id)}>{coach.name}</LinkButton>:'Unassigned'}/><InfoLine label="Coach style" value={coach?.style??'—'}/><InfoLine label="Selection year" value={team.selectionYear??universe.year}/><InfoLine label="Competition" value={team.selectionCompetition??'International window'}/><InfoLine label="Roster average" value={roster.length?(roster.reduce((sum,p)=>sum+p.current,0)/roster.length).toFixed(1):'—'}/></section></div>}
     {tab==='Availability'&&<section className="panel"><SectionHeader title="Unavailable and omitted players" note="Stars do not automatically attend every tournament"/><div className="availability-list">{(team.unavailablePlayers??[]).map((item)=><button key={item.playerId} onClick={()=>onPlayer(item.playerId)}><div><strong>{item.name}</strong><span>{item.team} · {item.current} OVR</span></div><em>{item.reason}</em></button>)}</div>{!team.unavailablePlayers?.length&&<div className="empty-state">No notable absences recorded for this selection.</div>}</section>}
     {tab==='History'&&<section className="panel"><SectionHeader title="International tournament history" note="Every recorded edition"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Tournament</th><th>Result</th><th>Record</th><th>MVP</th></tr></thead><tbody>{editions.map((season,index)=>{const standing=season.standings?.find((row)=>row.teamId===team.id);const result=season.championTeamId===team.id?'Champion':season.runnerUpTeamId===team.id?'Runner-up':standing?`#${season.standings.findIndex((row)=>row.teamId===team.id)+1}`:'Participated';return <tr key={`${season.competitionId}-${season.year}-${index}`}><td>{season.year}</td><td><LinkButton onClick={()=>onCompetition(season.competitionId)}>{season.competitionName}</LinkButton></td><td>{result}</td><td>{standing?`${standing.wins}–${standing.losses}`:'—'}</td><td>{season.mvp?.name??'—'}</td></tr>;})}</tbody></table></div>{!editions.length&&<div className="empty-state">No completed international edition yet.</div>}</section>}
-    {tab==='Honors'&&<TeamHonorsPanel honors={team.honors}/>}</>;
+    {tab==='Honors'&&<><TeamHonorsPanel honors={team.honors}/><FranchiseFivePanel team={team} universe={universe} onPlayer={onPlayer}/></>}</>;
 }
 
 function DetailRouter({ detail, universe, teamById, playerById, coachById, onBack, onTeam, onPlayer, onCoach, onCompetition, onToggleFollow }) {
@@ -523,6 +970,15 @@ function WorldView({ universe, setView, setMarketTab, onTeam, onPlayer }) {
   }).filter((row) => row.teams >= 4).sort((a,b) => b.rating-a.rating).slice(0,12);
   return <>
     <section className="world-hero modern-hero"><div className="world-hero-copy"><div className="kicker light">The Global Five · {universe.year}</div><h2>The living basketball world</h2><p>Follow careers from college and club systems to the NBA, EuroLeague and international basketball. Every title, draft, transfer and great season becomes part of the permanent archive.</p><div className="story-actions"><button className="button primary" onClick={() => setView('Tournaments')}>Explore competitions</button><button className="button ghost-light" onClick={() => goToRoute('market/free-agency')}>Open market</button></div></div><div className="world-hero-stars">{leaders.slice(0,3).map((player,index)=><button key={player.id} className={`hero-player-card hero-rank-${index+1}`} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} size={84}/><div><Rarity value={player.rarity}/><strong>{player.name}</strong><span>{player.teamName} · {player.current} OVR</span></div></button>)}</div></section>
+    <section className="world-command-grid" aria-label="World briefing">
+      <button className="world-command-card primary-command" onClick={()=>setView('Tournaments')}>
+        <span className="kicker">NEXT MAJOR EVENTS</span><strong>{universe.yearReview?'Season review':universe.showcase?.active?'Showcase in progress':'Tournament calendar'}</strong>
+        <small>{universe.showcase?.active?`${universe.showcase.games?.length??0} selected showcase games`:`Week ${universe.week} · ${universe.phase}`}</small><b>Explore events →</b>
+      </button>
+      <button className="world-command-card" onClick={()=>onTeam(topTeams[0])}><span className="kicker">WORLD'S STRONGEST CLUB</span><strong>{topTeams[0]?.name??'—'}</strong><small>{topTeams[0]?.rating?.toFixed(1)??'—'} OVR · {topTeams[0]?.competition??''}</small><b>View franchise →</b></button>
+      <button className="world-command-card" onClick={()=>onPlayer(leaders[0])}><span className="kicker">BEST ACTIVE PLAYER</span><strong>{leaders[0]?.name??'—'}</strong><small>{leaders[0]?.current??'—'} OVR · {leaders[0]?.rarity??''}</small><b>View career →</b></button>
+      <button className="world-command-card" onClick={()=>goToRoute('market/summary')}><span className="kicker">SUMMER MOVEMENT</span><strong>{universe.offseasonHistory?.length?'Winners & losers':'Transfer market'}</strong><small>{universe.freeAgents?.length??0} available free agents</small><b>Open market →</b></button>
+    </section>
     <div className="metric-grid world-metrics"><Metric label="NBA average" value={avg(nba).toFixed(1)} detail="Deepest talent pool" /><Metric label="EuroLeague average" value={avg(euro).toFixed(1)} detail="Top non-NBA clubs" /><Metric label="NCAA average" value={avg(ncaa).toFixed(1)} detail="Prospect level" /><Metric label="Free agents" value={universe.freeAgents.length} detail="Visible market pool" /></div>
     <section className="two-column section-gap"><section className="panel visual-panel"><SectionHeader title="Global team power" note="National teams excluded" /><div className="rank-list">{topTeams.map((team,index) => <button className="rank-row rank-button visual-rank" key={team.id} onClick={() => onTeam(team)}><span className="rank-number">{index+1}</span><TeamMark team={team} size={46}/><div className="grow"><strong><Flag value={team.country}/> {team.name}</strong><span>{team.competition} · raw {team.rawRating}</span></div><RatingPill value={team.rating}/></button>)}</div></section><section className="panel visual-panel"><SectionHeader title="Best players today" note="Open a full career" /><div className="player-mini-grid">{leaders.map((player) => <button className={`mini-player-card rarity-surface-${player.rarity.toLowerCase()}`} key={player.id} onClick={() => onPlayer(player)}><PlayerPortrait player={player} size={66}/><div><Rarity value={player.rarity}/><strong>{player.name}</strong><span><Flag value={player.nationality}/> {player.position} · {player.teamName}</span></div><RatingPill value={player.current}/></button>)}</div></section></section>
     <section className="panel section-gap"><SectionHeader title="League strength" note="Current roster, coaching and institutional context"/><div className="table-wrap"><table><thead><tr><th>#</th><th>Competition</th><th>Region</th><th>Teams</th><th>Average rating</th></tr></thead><tbody>{leagueStrengths.map((row,index)=><tr key={row.competition.id}><td>{index+1}</td><td><span className="table-identity"><CompetitionEmblem competition={row.competition} size={32}/><strong>{row.competition.name}</strong></span></td><td><Flag value={row.competition.region}/> {row.competition.region}</td><td>{row.teams}</td><td><strong>{row.rating.toFixed(1)}</strong></td></tr>)}</tbody></table></div></section>
@@ -643,8 +1099,8 @@ function MarketView({ universe, tab, setTab, onPlayer, onTeam, onCoach }) {
   const worsened=[...filteredSummaryTeams].sort((a,b)=>a.delta-b.delta||a.after-b.after).slice(0,12);
   const selectedLegacy=(yearFilter==='All'?(universe.legacyHistory??[])[0]:(universe.legacyHistory??[]).find((item)=>String(item.year)===String(yearFilter)))??null;
   const legacyRows=(selectedLegacy?[...(selectedLegacy.nbaInductions??[]),...(selectedLegacy.fibaInductions??[]),...(selectedLegacy.jerseyRetirements??[])]:[]).filter((item)=>rarity==='All'||item.rarity===rarity).filter((item)=>`${item.player??''} ${item.team??''} ${item.hall??''}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>sort==='Rarity'?rarityRank(a.rarity)-rarityRank(b.rarity)||b.score-a.score:sort==='Rating'?b.score-a.score:sort==='Name'?String(a.player).localeCompare(String(b.player)):0);
-  return <><div className="page-heading"><div><div className="kicker">Offseason & Market</div><h2>Draft, trades, contracts, free agency and roster movement</h2></div><div className="page-note">The offseason now runs in inspectable stages. Basketball uses more player movement than the football build, especially through NBA trades and international transfers.</div></div>
-    {universe.offseason?.active&&<div className="offseason-progress">{OFFSEASON_STAGES.map((stage,index)=><span key={stage} className={index<universe.offseason.stageIndex?'done':index===universe.offseason.stageIndex?'active':''}>{index+1}. {stage}</span>)}</div>}
+  return <><div className="page-heading"><div><div className="kicker">Offseason & Market</div><h2>Draft, trades, contracts, free agency and roster movement</h2></div><div className="page-note">The offseason runs as a staged event. Teams protect their cores first; the draft, selective trades, coaching decisions and free agency determine the summer winners and losers.</div></div>
+    {universe.offseason?.active&&<><OffseasonStageSpotlight universe={universe} onPlayer={onPlayer} onTeam={onTeam} onCoach={onCoach}/><div className="offseason-progress compact-stage-progress">{OFFSEASON_STAGES.map((stage,index)=><span key={stage} className={index<universe.offseason.stageIndex?'done':index===universe.offseason.stageIndex?'active':''}>{index+1}. {stage}</span>)}</div></>}
     <div className="tabs market-tabs">{tabs.map((item)=><button key={item} className={tab===item?'active':''} onClick={()=>setTab(item)}>{item}</button>)}</div>
     {tab==='Offseason Summary'&&<><section className="panel"><SectionHeader title={selectedSummary?`${selectedSummary.year} offseason summary`:'Offseason summary'} note="Who improved, who declined and how much movement occurred"/><div className="filters compact market-controls"><Filter label="Offseason"><select value={yearFilter} onChange={(e)=>setYearFilter(e.target.value)}><option>All</option>{(universe.offseasonHistory??[]).map((item)=><option key={item.year} value={item.year}>{item.year}</option>)}</select></Filter><Filter label="Competition"><select value={summaryCompetition} onChange={(e)=>setSummaryCompetition(e.target.value)}><option>All</option>{summaryCompetitions.map((item)=><option key={item}>{item}</option>)}</select></Filter></div>{selectedSummary?<><div className="metric-grid detail-metrics"><Metric label="NBA trades" value={selectedSummary.nbaTrades} detail="Completed player-for-player deals"/><Metric label="International transfers" value={selectedSummary.internationalTransfers} detail="Club-to-club moves"/><Metric label="Free-agent signings" value={selectedSummary.freeAgentSignings} detail="Open-market contracts"/><Metric label="NBA international" value={`${selectedSummary.nbaInternationalShare}%`} detail={`${selectedSummary.nbaInternationalPlayers} of 300 modeled roster spots`}/></div><div className="two-column section-gap"><OffseasonTeamMovement title="Most improved" rows={improved} onTeam={onTeam}/><OffseasonTeamMovement title="Biggest declines" rows={worsened} onTeam={onTeam}/></div></>:<div className="empty-state">Complete an offseason to generate the first movement report.</div>}</section></>}
     {tab==='Trades'&&<section className="panel"><SectionHeader title="Trade wire" note={`${tradeRows.length} matching NBA and international trades`}/>{sharedControls}<div className="table-wrap"><table><thead><tr><th>Year</th><th>Player</th><th>Rarity</th><th>Move</th><th>OVR</th><th>Detail</th></tr></thead><tbody>{tradeRows.slice(0,400).map((item,index)=><tr className="clickable" key={`${item.playerId}-${item.year}-${index}`} onClick={()=>onPlayer(item.playerId)}><td>{item.year}</td><td><strong>{item.player}</strong></td><td><Rarity value={itemRarity(item)}/></td><td>{item.from} → {item.to}</td><td>{item.current??itemPlayer(item)?.current??'—'}</td><td>{item.type} · {item.detail}</td></tr>)}</tbody></table></div>{!tradeRows.length&&<div className="empty-state">No matching trades.</div>}</section>}
@@ -659,7 +1115,7 @@ function MarketView({ universe, tab, setTab, onPlayer, onTeam, onCoach }) {
   </>;
 }
 function MarketControls({rarity,setRarity,search,setSearch,sort,setSort,yearFilter,setYearFilter,years}) {return <div className="filters compact market-controls"><Filter label="Year"><select value={yearFilter} onChange={(e)=>setYearFilter(e.target.value)}><option>All</option>{years.map((year)=><option key={year} value={year}>{year}</option>)}</select></Filter><Filter label="Rarity"><select value={rarity} onChange={(e)=>setRarity(e.target.value)}><option>All</option>{RARITY_ORDER.map((item)=><option key={item}>{item}</option>)}</select></Filter><Filter label="Sort"><select value={sort} onChange={(e)=>setSort(e.target.value)}><option>Newest</option><option>Rarity</option><option>Rating</option><option>Name</option></select></Filter><Filter label="Search"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Player, team, route"/></Filter></div>}
-function OffseasonTeamMovement({title,rows,onTeam}) {return <section className="panel inset-panel"><SectionHeader title={title} note="Rating before → after"/><div className="rank-list">{rows.map((row,index)=><button className="rank-row rank-button" key={row.teamId} onClick={()=>onTeam(row.teamId)}><span className="rank-number">{index+1}</span><div className="grow"><strong><Flag value={row.country}/> {row.team}</strong><span>{row.competition} · {row.arrivals} in / {row.departures} out</span></div><span>{row.before} → {row.after}</span><strong className={row.delta>=0?'positive':'negative'}>{row.delta>=0?'+':''}{row.delta}</strong></button>)}</div></section>}
+function OffseasonTeamMovement({title,rows,onTeam}) {return <section className="panel inset-panel"><SectionHeader title={title} note="Rating before → after · key causes"/><div className="rank-list offseason-rank-list">{rows.map((row,index)=>{const bestIn=[...(row.playersIn??[])].sort((a,b)=>Number(b.current)-Number(a.current))[0];const bestOut=[...(row.playersOut??[])].sort((a,b)=>Number(b.current)-Number(a.current))[0];return <button className="rank-row rank-button" key={row.teamId} onClick={()=>onTeam(row.teamId)}><span className="rank-number">{index+1}</span><div className="grow"><strong><Flag value={row.country}/> {row.team}</strong><span>{row.competition} · {row.arrivals} in / {row.departures} out{bestIn?` · + ${bestIn.player} (${bestIn.current})`:''}{row.coachIn?` · coach ${row.coachIn.current}`:''}{!bestIn&&bestOut?` · lost ${bestOut.player} (${bestOut.current})`:''}</span></div><span>{row.before} → {row.after}</span><strong className={row.delta>=0?'positive':'negative'}>{row.delta>=0?'+':''}{row.delta}</strong></button>})}</div></section>}
 
 function playerSeasonRows(player, universe) {
   const rows = [...(player.history ?? [])];
@@ -717,16 +1173,24 @@ function StatisticsView({ universe, teamById, onPlayer }) {
   return <section className="panel"><SectionHeader title="Statistics" note={`${scope==='Career'?'Career':'Season '+season} · ${categories[category]} · ${shown.length} ranked players`}/><div className="filters six"><Filter label="Scope"><select value={scope} onChange={(e)=>setScope(e.target.value)}><option>Season</option><option>Career</option></select></Filter>{scope==='Season'&&<Filter label="Season"><select value={season} onChange={(e)=>setSeason(e.target.value)}>{years.map((year)=><option key={year} value={year}>{year}</option>)}</select></Filter>}<Filter label="Continent"><select value={region} onChange={(e)=>setRegion(e.target.value)}><option>All</option>{unique(universe.teams.map((team)=>team.region)).map((i)=><option key={i}>{i}</option>)}</select></Filter><Filter label="Competition"><select value={competition} onChange={(e)=>setCompetition(e.target.value)}><option>All</option>{competitions.map((i)=><option key={i}>{i}</option>)}</select></Filter><Filter label="Position"><select value={position} onChange={(e)=>setPosition(e.target.value)}><option>All</option>{POSITION_ORDER.map((i)=><option key={i}>{i}</option>)}</select></Filter><Filter label="Rarity"><select value={rarity} onChange={(e)=>setRarity(e.target.value)}><option>All</option>{RARITY_ORDER.map((i)=><option key={i}>{i}</option>)}</select></Filter><Filter label="Category"><select value={category} onChange={(e)=>setCategory(e.target.value)}>{Object.entries(categories).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></Filter></div><PlayerTable players={shown} onPlayer={onPlayer} highlight={category}/></section>;
 }
 
-function MagazineView({ universe, onPlayer }) {
-  const [section,setSection]=useState('Magazine');
-  const topPlayers=[...universe.players].filter((p)=>p.status==='Active').sort((a,b)=>b.current-a.current).slice(0,8);
-  const draft=universe.draftHistory[0]; const nbaHall=universe.hallOfFame?.nba??[]; const fibaHall=universe.hallOfFame?.fiba??[];
-  const cover=topPlayers[0];
-  return <><div className="magazine-header magazine-cover"><div className="magazine-cover-copy"><div className="kicker light">Weekly world basketball magazine</div><h2>The Global Five</h2><p>Careers, power shifts, draft stories and historical context.</p></div>{cover&&<button className="magazine-cover-player" onClick={()=>onPlayer(cover)}><PlayerPortrait player={cover} size={112}/><span>WORLD No. 1</span><strong>{cover.name}</strong><small>{cover.teamName} · {cover.current} OVR</small></button>}</div><div className="tabs section-gap"><button className={section==='Magazine'?'active':''} onClick={()=>setSection('Magazine')}>Magazine</button><button className={section==='Hall of Fame'?'active':''} onClick={()=>setSection('Hall of Fame')}>Hall of Fame</button></div>{section==='Magazine'?<div className="two-column"><section className="panel"><SectionHeader title="Market headline" note="Latest offseason"/>{draft?<article className="feature-copy"><h3>{draft.ncaaPicks} NCAA players and {draft.internationalPicks} international prospects drafted</h3><p>{draft.signed} joined immediately; {draft.rightsStashed} remain connected to NBA rights while building careers elsewhere.</p></article>:<div className="empty-state">Complete a season to create the first market story.</div>}</section><section className="panel"><SectionHeader title="Players to follow" note="Open a full career"/><div className="magazine-player-list">{topPlayers.map((p)=><button className="feature-story visual-feature-story" key={p.id} onClick={()=>onPlayer(p)}><PlayerPortrait player={p} size={48}/><div><Rarity value={p.rarity}/><strong>{p.name}</strong><p>{p.teamName} · {p.stats.ppg} PPG · {p.honors.length} honors</p></div><RatingPill value={p.current}/></button>)}</div></section></div>:<div className="two-column"><HallOfFamePanel title="NBA Hall of Fame" rows={nbaHall} onPlayer={onPlayer}/><HallOfFamePanel title="FIBA Hall of Fame" rows={fibaHall} onPlayer={onPlayer}/></div>}</>;
+function MagazineView({ universe, onPlayer, onTeam }) {
+  const [section,setSection]=useState('Magazine'); const storyYears=unique(Object.values(universe.competitionHistory??{}).flatMap((rows)=>rows.map((r)=>r.year))).sort((a,b)=>Number(b)-Number(a)); const [storyYear,setStoryYear]=useState(String(storyYears[0]??universe.year));
+  const topPlayers=[...universe.players].filter((p)=>p.status==='Active').sort((a,b)=>b.current-a.current).slice(0,8); const draft=universe.draftHistory[0]; const nbaHall=universe.hallOfFame?.nba??[]; const fibaHall=universe.hallOfFame?.fiba??[]; const cover=topPlayers[0]; const stories=buildChronicleStories(universe,Number(storyYear));
+  return <><div className="magazine-header magazine-cover"><div className="magazine-cover-copy"><div className="kicker light">World basketball chronicle</div><h2>The Global Five</h2><p>Only the stories that change careers, franchises and eras make the cover.</p></div>{cover&&<button className="magazine-cover-player" onClick={()=>onPlayer(cover)}><PlayerPortrait player={cover} size={112}/><span>WORLD No. 1</span><strong>{cover.name}</strong><small>{cover.teamName} · {cover.current} OVR</small></button>}</div><div className="tabs section-gap"><button className={section==='Magazine'?'active':''} onClick={()=>setSection('Magazine')}>Magazine</button><button className={section==='Stories'?'active':''} onClick={()=>setSection('Stories')}>Iconic stories</button><button className={section==='Hall of Fame'?'active':''} onClick={()=>setSection('Hall of Fame')}>Hall of Fame</button></div>{section==='Magazine'?<><div className="chronicle-front-grid"><section className="panel"><SectionHeader title="Current power" note="The eight best active players"/><div className="magazine-player-list">{topPlayers.map((p)=><button className="feature-story visual-feature-story" key={p.id} onClick={()=>onPlayer(p)}><PlayerPortrait player={p} size={48}/><div><Rarity value={p.rarity}/><strong>{p.name}</strong><p>{p.teamName} · {p.stats.ppg} PPG · {p.honors.length} honors</p></div><RatingPill value={p.current}/></button>)}</div></section><section className="panel"><SectionHeader title="Latest offseason headline" note="Draft and market context"/>{draft?<article className="feature-copy"><h3>{draft.ncaaPicks} NCAA players and {draft.internationalPicks} international prospects drafted</h3><p>{draft.signed} joined immediately; {draft.rightsStashed} remain connected to NBA rights while developing elsewhere.</p></article>:<div className="empty-state">Complete a season to create the first market story.</div>}{stories.slice(0,3).map((story)=><StoryCard key={story.key} story={story} onPlayer={onPlayer} onTeam={onTeam}/>)}</section></div></>:section==='Stories'?<section className="panel"><div className="section-header"><h2>Iconic moments archive</h2><label className="inline-year-picker">Season <select value={storyYear} onChange={(e)=>setStoryYear(e.target.value)}>{storyYears.map((year)=><option value={year} key={year}>{year}</option>)}</select></label></div><div className="chronicle-story-grid">{stories.map((story)=><StoryCard key={story.key} story={story} onPlayer={onPlayer} onTeam={onTeam}/>)}{!stories.length&&<div className="empty-state">No story cleared the iconic threshold this year.</div>}</div></section>:<div className="two-column"><HallOfFamePanel title="NBA Hall of Fame" rows={nbaHall} onPlayer={onPlayer}/><HallOfFamePanel title="FIBA Hall of Fame" rows={fibaHall} onPlayer={onPlayer}/></div>}</>;
 }
 
 function HallOfFamePanel({title,rows,onPlayer}) {return <section className="panel"><SectionHeader title={title} note={`${rows.length} inducted careers`}/><div className="rank-list">{rows.map((entry,index)=><button className="rank-row rank-button" key={`${entry.hall}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><span className="rank-number">{index+1}</span><div className="grow"><strong>{entry.player}</strong><span>{entry.year} · {entry.rarity} · legacy {entry.score}{entry.summary?` · ${entry.summary.titles} titles · ${entry.summary.mvps+entry.summary.finalsMvps} major MVPs · ${entry.summary.firstFive} best-five`:''}</span></div><Rarity value={entry.rarity}/></button>)}</div>{!rows.length&&<div className="empty-state">No eligible retired career yet.</div>}</section>;}
-function AlmanacView({ universe, onCompetition }) {const rows=COMPETITIONS.map((competition)=>({competition,seasons:universe.competitionHistory[competition.id]??[]})).filter((row)=>row.seasons.length);return <><div className="metric-grid almanac-metrics"><Metric label="Active players" value={formatNumber(universe.players.length)} detail="Including free agents"/><Metric label="Archived careers" value={formatNumber(universe.retiredPlayers.length)} detail="Retired or left game"/><Metric label="Coaching careers" value={formatNumber(universe.coaches.length+universe.retiredCoaches.length)} detail="Active and retired"/><Metric label="Former owners" value={formatNumber(universe.formerOwners.length)} detail="Completed mandates"/></div><section className="panel"><SectionHeader title="Competition almanac" note="Latest champion and recorded editions"/><div className="table-wrap"><table><thead><tr><th>Competition</th><th>Region</th><th>Seasons</th><th>Latest champion</th><th>Latest MVP</th></tr></thead><tbody>{rows.map(({competition,seasons})=><tr className="clickable" key={competition.id} onClick={()=>onCompetition(competition)}><td><strong>{competition.name}</strong></td><td>{competition.region}</td><td>{seasons.length}</td><td>{seasons[0].champion}</td><td>{seasons[0].mvp.name}</td></tr>)}</tbody></table></div></section></>;}
+function AlmanacView({ universe, onCompetition }) {
+  const [tab,setTab]=useState('Greatness'); const rows=COMPETITIONS.map((competition)=>({competition,seasons:universe.competitionHistory[competition.id]??[]})).filter((row)=>row.seasons.length); const nbaDynasties=dynastyRows(universe,'nba'); const euroDynasties=dynastyRows(universe,'euroleague'); const rivalries=rivalryRows(universe); const nationalPowers=internationalLegacyRows(universe); const coachRows=[...universe.coaches,...universe.retiredCoaches].map((coach)=>({coach,titles:(coach.honors??[]).filter((h)=>h.type==='Champion').length,seasons:(coach.history??[]).length})).sort((a,b)=>b.titles-a.titles||b.seasons-a.seasons).slice(0,15);
+  const recordTabs=[['ppg','Career points'],['rpg','Career rebounds'],['apg','Career assists']];
+  return <><div className="metric-grid almanac-metrics"><Metric label="Active players" value={formatNumber(universe.players.length)} detail="Including free agents"/><Metric label="Archived careers" value={formatNumber(universe.retiredPlayers.length)} detail="Completed careers"/><Metric label="NBA Hall" value={universe.hallOfFame?.nba?.length??0} detail="Inducted careers"/><Metric label="FIBA Hall" value={universe.hallOfFame?.fiba?.length??0} detail="Inducted careers"/></div><div className="tabs"><button className={tab==='Greatness'?'active':''} onClick={()=>setTab('Greatness')}>Greatness</button><button className={tab==='Records'?'active':''} onClick={()=>setTab('Records')}>Records</button><button className={tab==='Coaches'?'active':''} onClick={()=>setTab('Coaches')}>Coaches</button><button className={tab==='Competitions'?'active':''} onClick={()=>setTab('Competitions')}>Competitions</button></div>{tab==='Greatness'&&<><div className="two-column section-gap"><DynastyPanel title="NBA dynasties" rows={nbaDynasties}/><DynastyPanel title="EuroLeague dynasties" rows={euroDynasties}/></div><RivalryPanel rows={rivalries}/><NationalPowerPanel rows={nationalPowers}/></>}{tab==='Records'&&<><div className="three-column section-gap">{recordTabs.map(([key,title])=><CareerRecordPanel key={key} title={title} rows={careerStatLeaders(universe,key)}/>)}</div><SingleSeasonPanel rows={singleSeasonLeaders(universe,'ppg')}/></>}{tab==='Coaches'&&<section className="panel section-gap"><SectionHeader title="Greatest coaches" note="Championships first, longevity second"/><div className="rank-list">{coachRows.map((row,index)=><div className="rank-row" key={row.coach.id}><span className="rank-number">{index+1}</span><div className="grow"><strong>{row.coach.name}</strong><span>{row.coach.rarity} · {row.seasons} seasons</span></div><strong>{row.titles} titles</strong></div>)}</div></section>}{tab==='Competitions'&&<section className="panel section-gap"><SectionHeader title="Competition almanac" note="Latest champion and recorded editions"/><div className="table-wrap"><table><thead><tr><th>Competition</th><th>Region</th><th>Seasons</th><th>Latest champion</th><th>Latest MVP</th></tr></thead><tbody>{rows.map(({competition,seasons})=><tr className="clickable" key={competition.id} onClick={()=>onCompetition(competition)}><td><strong>{competition.name}</strong></td><td>{competition.region}</td><td>{seasons.length}</td><td>{seasons[0].champion}</td><td>{seasons[0].mvp.name}</td></tr>)}</tbody></table></div></section>}</>;
+}
+function DynastyPanel({title,rows}) {return <section className="panel"><SectionHeader title={title} note="Longest consecutive-title runs"/><div className="rank-list">{rows.map((row,index)=><div className="rank-row" key={`${row.teamId}-${row.start}`}><span className="rank-number">{index+1}</span><div className="grow"><strong>{row.team}</strong><span>{row.start===row.end?row.start:`${row.start}–${row.end}`} · {row.totalTitles} total titles</span></div><strong>{row.streak} straight</strong></div>)}</div>{!rows.length&&<div className="empty-state">No completed era yet.</div>}</section>}
+function RivalryPanel({rows}) {return <section className="panel section-gap"><SectionHeader title="Postseason rivalries" note="Repeated meetings in the biggest competitions, weighted toward late rounds"/><div className="rivalry-grid">{rows.map((row)=><article key={row.key}><div><strong>{row.teamA}</strong><span>{row.winsA}</span></div><b>vs</b><div><strong>{row.teamB}</strong><span>{row.winsB}</span></div><small>{row.meetings} meetings · {row.majorRounds} major-round meetings · {row.competitions.join(', ')}</small></article>)}</div>{!rows.length&&<div className="empty-state">Rivalries emerge after teams meet repeatedly in major brackets.</div>}</section>}
+function NationalPowerPanel({rows}) {return <section className="panel section-gap"><SectionHeader title="National-team empires" note="World/Olympic titles count triple; continental titles add depth"/><div className="rank-list">{rows.map((row,index)=><div className="rank-row" key={`${row.teamId??row.team}-${index}`}><span className="rank-number">{index+1}</span><div className="grow"><strong>{row.team}</strong><span>{row.major} World/Olympic · {row.regional} continental</span></div><strong>{row.score} legacy pts</strong></div>)}</div>{!rows.length&&<div className="empty-state">International history is still being written.</div>}</section>}
+function SingleSeasonPanel({rows}) {return <section className="panel section-gap"><SectionHeader title="Greatest scoring seasons" note="Highest recorded points-per-game seasons"/><div className="rank-list two-rank-columns">{rows.map((row,index)=><div className="rank-row" key={`${row.playerId}-${row.year}`}><span className="rank-number">{index+1}</span><div className="grow"><strong>{row.player}</strong><span>{row.year} · {row.team} · {row.rarity}</span></div><strong>{row.value} PPG</strong></div>)}</div></section>}
+function CareerRecordPanel({title,rows}) {return <section className="panel"><SectionHeader title={title} note="Recorded career totals"/><div className="rank-list compact-ranks">{rows.map((row,index)=><div className="rank-row" key={row.playerId}><span className="rank-number">{index+1}</span><div className="grow"><strong>{row.player}</strong><span>{row.rarity} · {row.games} games</span></div><strong>{formatNumber(row.value)}</strong></div>)}</div></section>}
+
 
 function teamStrengthContext(universe, team) {
   const competitionId = team.secondaryCompetitionIds?.includes('euroleague') ? 'euroleague' : team.competitionId;
@@ -765,16 +1229,16 @@ function OffseasonProfileDelta({ row }) {
 }
 
 function TeamPage({ team, universe, onBack, onPlayer, onCoach, onCompetition }) {
-  const [tab,setTab]=useState('Overview'); const roster=team.rosterIds.map((id)=>universe.players.find((p)=>p.id===id)).filter(Boolean).sort((a,b)=>POSITION_ORDER.indexOf(a.position)-POSITION_ORDER.indexOf(b.position)||b.current-a.current); const coach=[...universe.coaches,...universe.retiredCoaches].find((item)=>item.id===team.coachId); const owner=[...universe.owners,...universe.formerOwners].find((item)=>item.id===team.ownerId); const locals=roster.filter((p)=>p.nationality===team.country||(team.type==='NBA'&&['USA','Canada'].includes(p.nationality))).length; const stars=[...roster].sort((a,b)=>b.current-a.current).slice(0,5);
-  return <><DetailHeader onBack={onBack}><div className="entity-hero team-entity-hero" style={{'--entity-color':team.color}}><TeamMark team={team} size={96} className="hero-badge"/><div className="entity-hero-copy"><div className="kicker"><Flag value={team.country}/> {team.country} · {team.region}</div><h2>{team.name}</h2><p className="linked-competitions"><LinkButton onClick={()=>onCompetition(team.competitionId)}>{team.competition}</LinkButton>{team.secondaryCompetitions.map((name,index)=><React.Fragment key={`${name}-${index}`}><span> · </span><LinkButton onClick={()=>onCompetition(team.secondaryCompetitionIds[index])}>{name}</LinkButton></React.Fragment>)}</p><div className="entity-chip-row"><span>{team.wins}–{team.losses}</span><span>{team.honors.length} titles</span><span>{team.continuity??0}% continuity</span></div></div><RatingPill value={team.rating} label="WORLD"/></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="World rating" value={team.rating} detail={`Raw roster ${team.rawRating}`}/><Metric label="Record" value={`${team.wins}–${team.losses}`} detail={team.competition}/><Metric label="Titles" value={team.honors.length} detail="Permanent cabinet"/><Metric label="Local players" value={`${locals}/${roster.length}`} detail={`Minimum ${team.localMinimum}`}/></div><DetailTabs tabs={['Overview','Seasons','Honors','Retired jerseys','Leadership','Transfers']} tab={tab} setTab={setTab}/>
-    {tab==='Overview'&&<><TeamStrengthProfile team={team} universe={universe}/><section className="panel section-gap"><SectionHeader title="Core players" note="The five highest-rated players on the current roster"/><div className="lineup-card-grid">{stars.map(player=><button className={`lineup-player rarity-surface-${player.rarity.toLowerCase()}`} key={player.id} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} team={team} size={82}/><span className="lineup-pos">{player.position}</span><strong>{player.name}</strong><Rarity value={player.rarity}/><small>{player.stats.ppg} PPG · {player.stats.rpg} RPG</small><RatingPill value={player.current}/></button>)}</div></section><div className="two-column detail-columns section-gap"><section className="panel"><SectionHeader title="Current roster" note={`${roster.length} players`}/><PlayerTable players={roster} onPlayer={onPlayer} compact/></section><section className="panel team-identity-panel"><SectionHeader title="Current identity" note="Leadership affects performance and recruitment"/>{coach&&<button className="identity-person-card" onClick={()=>onCoach(coach.id)}><CoachPortrait coach={coach} team={team} size={64}/><div><small>HEAD COACH</small><strong>{coach.name}</strong><span>{coach.style} · {coach.current} OVR</span></div></button>}<InfoLine label="President / owner" value={owner?`${owner.name} · ${owner.profile}`:'Unassigned'}/><InfoLine label="Owner rarity" value={owner?.rarity??'—'}/><InfoLine label="Prestige" value={team.prestige}/><InfoLine label="Continuity" value={`${team.continuity??0}%`}/><InfoLine label="Tier" value={team.tier===2?'Second tier':'Top tier'}/><InfoLine label="NCAA alumni" value={roster.filter((p)=>p.originRoute==='NCAA').length}/></section></div></>}
+  const [tab,setTab]=useState('Overview'); const roster=team.rosterIds.map((id)=>universe.players.find((p)=>p.id===id)).filter(Boolean).sort((a,b)=>POSITION_ORDER.indexOf(a.position)-POSITION_ORDER.indexOf(b.position)||b.current-a.current); const coach=[...universe.coaches,...universe.retiredCoaches].find((item)=>item.id===team.coachId); const owner=[...universe.owners,...universe.formerOwners].find((item)=>item.id===team.ownerId); const locals=roster.filter((p)=>p.nationality===team.country||(team.type==='NBA'&&['USA','Canada'].includes(p.nationality))).length; const stars=[...roster].sort((a,b)=>b.current-a.current).slice(0,3); const era=teamEraStatus(universe,team); const prospects=roster.filter((p)=>p.age<=22).length; const expiring=roster.filter((p)=>p.contract&&Number(p.contract.endYear)<=Number(universe.year)+1).length; const previous=[...(team.history??[])].sort((a,b)=>Number(b.year)-Number(a.year))[0];
+  return <><DetailHeader onBack={onBack}><div className="entity-hero team-entity-hero" style={{'--entity-color':team.color}}><TeamMark team={team} size={96} className="hero-badge"/><div className="entity-hero-copy"><div className="kicker"><Flag value={team.country}/> {team.country} · {team.region}</div><h2>{team.name}</h2><p className="linked-competitions"><LinkButton onClick={()=>onCompetition(team.competitionId)}>{team.competition}</LinkButton>{team.secondaryCompetitions.map((name,index)=><React.Fragment key={`${name}-${index}`}><span> · </span><LinkButton onClick={()=>onCompetition(team.secondaryCompetitionIds[index])}>{name}</LinkButton></React.Fragment>)}</p><div className="entity-chip-row"><span className={`team-era team-era-${era.tone}`}>{era.label}</span><span>{team.wins}–{team.losses}</span><span>{team.honors.length} titles</span><span>{team.continuity??0}% continuity</span></div></div><RatingPill value={team.rating} label="WORLD"/></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="World rating" value={team.rating} detail={`Raw roster ${team.rawRating}`}/><Metric label="Record" value={`${team.wins}–${team.losses}`} detail={team.competition}/><Metric label="Titles" value={team.honors.length} detail="Permanent cabinet"/><Metric label="Local players" value={`${locals}/${roster.length}`} detail={`Minimum ${team.localMinimum}`}/><Metric label="Trajectory" value={previous?`${previous.rating} → ${team.rating}`:'New'} detail={era.label}/><Metric label="Young core" value={prospects} detail="Players age 22 or younger"/><Metric label="Expiring" value={expiring} detail="Contracts through next year"/></div><DetailTabs tabs={['Overview','Seasons','Honors','Retired jerseys','Leadership','Transfers']} tab={tab} setTab={setTab}/>
+    {tab==='Overview'&&<><TeamStrengthProfile team={team} universe={universe}/><StartingFiveCourt team={team} universe={universe} onPlayer={onPlayer}/><section className="panel section-gap"><SectionHeader title="Franchise core" note="The three assets this team is built around"/><div className="lineup-card-grid">{stars.map(player=><button className={`lineup-player rarity-surface-${player.rarity.toLowerCase()}`} key={player.id} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} team={team} size={82}/><span className="lineup-pos">{player.position}</span><strong>{player.name}</strong><Rarity value={player.rarity}/><small>{player.stats.ppg} PPG · {player.stats.rpg} RPG</small><RatingPill value={player.current}/></button>)}</div></section><div className="two-column detail-columns section-gap"><section className="panel"><SectionHeader title="Current roster" note={`${roster.length} players`}/><PlayerTable players={roster} onPlayer={onPlayer} compact/></section><section className="panel team-identity-panel"><SectionHeader title="Current identity" note="Leadership affects performance and recruitment"/>{coach&&<button className="identity-person-card" onClick={()=>onCoach(coach.id)}><CoachPortrait coach={coach} team={team} size={64}/><div><small>HEAD COACH</small><strong>{coach.name}</strong><span>{coach.style} · {coach.current} OVR</span></div></button>}<InfoLine label="President / owner" value={owner?`${owner.name} · ${owner.profile}`:'Unassigned'}/><InfoLine label="Owner rarity" value={owner?.rarity??'—'}/><InfoLine label="Prestige" value={team.prestige}/><InfoLine label="Continuity" value={`${team.continuity??0}%`}/><InfoLine label="Tier" value={team.tier===2?'Second tier':'Top tier'}/><InfoLine label="NCAA alumni" value={roster.filter((p)=>p.originRoute==='NCAA').length}/></section></div></>}
     {tab==='Seasons'&&<section className="panel"><SectionHeader title="Annual team breakdown" note="Coach, owner, record, rating and titles"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Competition</th><th>Record</th><th>Rating</th><th>Coach</th><th>Owner</th><th>Titles</th></tr></thead><tbody>{[...team.history].reverse().map((season,index)=>{const c=[...universe.coaches,...universe.retiredCoaches].find((item)=>item.id===season.coachId);const o=[...universe.owners,...universe.formerOwners].find((item)=>item.id===season.ownerId);return <tr key={`${season.year}-${index}`}><td><strong>{season.year}</strong></td><td>{season.competition}</td><td>{season.wins}–{season.losses}</td><td>{season.rating}</td><td>{c?.name??'—'}</td><td>{o?.name??'—'}</td><td>{season.titles.join(', ')||'—'}</td></tr>;})}</tbody></table></div></section>}
     {tab==='Honors'&&<TeamHonorsPanel honors={team.honors}/>} {tab==='Retired jerseys'&&<RetiredJerseysPanel team={team} onPlayer={onPlayer}/>} {tab==='Leadership'&&<div className="two-column"><section className="panel"><SectionHeader title="Head coach" note="Current appointment"/>{coach?<><div className="identity-person-card static"><CoachPortrait coach={coach} team={team} size={88}/><div><Rarity value={coach.rarity}/><strong>{coach.name}</strong><span>{coach.style} · {coach.current} OVR</span></div></div><InfoLine label="Offense / defense" value={`${coach.offense} / ${coach.defense}`}/><InfoLine label="Development" value={coach.development}/><InfoLine label="Contract through" value={coach.contractEnd}/></>:<div className="empty-state">Vacant</div>}</section><section className="panel"><SectionHeader title="President / owner" note="Mandate and bonuses"/>{owner?<><InfoLine label="Name" value={owner.name}/><InfoLine label="Profile" value={owner.profile}/><InfoLine label="Rarity" value={owner.rarity}/><InfoLine label="Mandate" value={`${owner.startYear}–${owner.endYear}`}/><InfoLine label="Recruitment / stability" value={`${owner.recruitment} / ${owner.stability}`}/></>:<div className="empty-state">Vacant</div>}<h3 className="subheading">Past mandates</h3>{team.leadershipHistory.slice(0,10).map((item)=><div className="info-line" key={item.ownerId}><span>{item.startYear}–{item.endYear}</span><strong>{item.name} · {item.rarity}</strong></div>)}</section></div>} {tab==='Transfers'&&<TeamMovementHistory team={team} universe={universe} onPlayer={onPlayer} onCoach={onCoach}/>}</>;
 }
 
 function PlayerPage({ player, universe, onBack, onTeam, onCompetition, onToggleFollow }) {
   const [tab,setTab]=useState('Overview'); const currentTeam=universe.teams.find((t)=>t.id===player.teamId); const rightsTeam=player.rightsTeamId?universe.teams.find((t)=>t.id===player.rightsTeamId):null; const collegeYearsShown=player.originRoute==='NCAA'?(player.teamType==='NCAA'?4:Math.min(4,Math.max(1,(player.yearsInNCAA??0)+1))):0; const developmentCurve=player.originRoute==='NCAA'?[...(player.ncaaCurve??[]).slice(0,collegeYearsShown),...(player.proCurve??[])]:player.careerCurve; const developmentIndex=player.originRoute==='NCAA'?(player.teamType==='NCAA'?Math.min(collegeYearsShown-1,player.yearsInNCAA??0):collegeYearsShown+Math.max(0,(player.proYears??1)-1)):player.careerYear; const followed=(universe.followedPlayerIds??[]).includes(player.id);
-  return <><DetailHeader onBack={onBack}><div className={`entity-hero player-entity-hero rarity-surface-${player.rarity.toLowerCase()}`} style={{'--entity-color':currentTeam?.color||'#315d9b'}}><PlayerPortrait player={player} team={currentTeam} size={118} className="hero-portrait"/><div className="entity-hero-copy"><div className="kicker"><Flag value={player.nationality}/> {player.nationality} · {player.age} · {player.status}</div><h2>{player.name}{player.realIdentity&&<span className="historical-identity-badge">Historical pool</span>}</h2><p>{currentTeam?<LinkButton onClick={()=>onTeam(currentTeam.id)}>{player.teamName}</LinkButton>:player.teamName} · #{player.jerseyNumber??'—'} · {player.position} · {player.role}</p><div className="entity-chip-row"><Rarity value={player.rarity}/><span>Base {player.base}</span><span>{player.height} cm · {player.body}</span></div></div><RatingPill value={player.current}/><button className={`follow-player ${followed?'active':''}`} onClick={()=>onToggleFollow?.(player.id)} title={followed?'Remove bookmark':'Bookmark player'}>{followed?'★':'☆'}<span>{followed?'Following':'Follow'}</span></button></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="Rarity" value={player.rarity} detail="Permanent"/><Metric label="Base" value={player.base} detail="Permanent ability"/><Metric label="Current" value={player.current} detail={`Career year ${player.careerYear+1}`}/><Metric label="Honors" value={player.honors.length} detail={`${player.internationalHistory?.length??0} international appearances`}/></div><DetailTabs tabs={['Overview','Career','International','Honors','Timeline']} tab={tab} setTab={setTab}/>
+  return <><DetailHeader onBack={onBack}><div className={`entity-hero player-entity-hero rarity-surface-${player.rarity.toLowerCase()}`} style={{'--entity-color':currentTeam?.color||'#315d9b'}}><PlayerPortrait player={player} team={currentTeam} size={118} className="hero-portrait"/><div className="entity-hero-copy"><div className="kicker"><Flag value={player.nationality}/> {player.nationality} · {player.age} · {player.status}</div><h2>{player.name}{player.realIdentity&&<span className="historical-identity-badge">Historical pool</span>}</h2><p>{currentTeam?<LinkButton onClick={()=>onTeam(currentTeam.id)}>{player.teamName}</LinkButton>:player.teamName} · #{player.jerseyNumber??'—'} · {player.position} · {player.role}</p><div className="entity-chip-row"><Rarity value={player.rarity}/><span>{playerCareerStage(player)}</span><span>Base {player.base}</span><span>{player.height} cm · {player.body}</span></div></div><RatingPill value={player.current}/><button className={`follow-player ${followed?'active':''}`} onClick={()=>onToggleFollow?.(player.id)} title={followed?'Remove bookmark':'Bookmark player'}>{followed?'★':'☆'}<span>{followed?'Following':'Follow'}</span></button></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="Rarity" value={player.rarity} detail="Permanent"/><Metric label="Base" value={player.base} detail="Permanent ability"/><Metric label="Current" value={player.current} detail={`Career year ${player.careerYear+1}`}/><Metric label="Honors" value={player.honors.length} detail={`${player.internationalHistory?.length??0} international appearances`}/><Metric label="Career stage" value={playerCareerStage(player)} detail={`${Math.max(0,(player.careerYears??0)-(player.careerYear??0)-1)} projected years left`}/></div><DetailTabs tabs={['Overview','Career','International','Honors','Timeline']} tab={tab} setTab={setTab}/>
     {tab==='Overview'&&<><div className="two-column detail-columns"><section className="panel"><SectionHeader title="Career identity" note={player.careerProfile}/><InfoLine label="Position" value={player.position}/><InfoLine label="Jersey" value={player.jerseyNumber!=null?`#${player.jerseyNumber}`:"—"}/><InfoLine label="Height / body" value={`${player.height} cm · ${player.body}`}/><InfoLine label="Role" value={player.role}/><InfoLine label="Origin route" value={player.originRoute}/>{player.realIdentity&&<InfoLine label="Historical identity" value="Real-name legend pool"/>}<InfoLine label="Career length" value={`${player.careerYears} years`}/><InfoLine label="Current multiplier" value={player.developmentMultiplier??developmentCurve[developmentIndex]??'—'}/>{player.draft&&<><InfoLine label="NBA Draft" value={`${player.draft.year} · Pick ${player.draft.pick} · ${player.draft.team}`}/><InfoLine label="Current NBA rights" value={rightsTeam?.name??(player.nbaJoinedYear?'Activated':'None')}/></>}<InfoLine label="Contract" value={player.contract?`${player.contract.team} · ${player.contract.salaryTier} · through ${player.contract.endYear}`:'No active contract'}/></section><section className="panel production-panel"><SectionHeader title="Current production" note={`${player.stats.games} games`}/><div className="stat-block-grid"><div><strong>{player.stats.ppg}</strong><span>PTS</span></div><div><strong>{player.stats.rpg}</strong><span>REB</span></div><div><strong>{player.stats.apg}</strong><span>AST</span></div><div><strong>{player.stats.spg}</strong><span>STL</span></div><div><strong>{player.stats.bpg}</strong><span>BLK</span></div></div><InfoLine label="Rebound split" value={`${player.stats.orpg} ORB · ${player.stats.drpg} DRB`}/><InfoLine label="Shooting" value={`${player.stats.fg}% FG · ${player.stats.three}% 3P · ${player.stats.ft}% FT`}/></section></div><section className="panel"><SectionHeader title="Career progression" note={player.originRoute==='NCAA'?'College years are capped at 0.89; professional years use the adult curve':'Base and rarity never change'}/><div className="career-year-scroll"><div className="career-year-strip">{developmentCurve.map((value,index)=>{const displayed=Math.round(player.base*value);return <div key={index} className={`career-year-card ${index===developmentIndex?'current-year':''}`}><small>Y{index+1}</small><strong>{displayed}</strong><span>{Number(value).toFixed(2)}</span></div>;})}</div></div></section></>}
     {tab==='Career'&&<section className="panel"><SectionHeader title="Detailed annual breakdown" note="Team, contract, production, ability and honors"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Age</th><th>#</th><th>Team</th><th>Competition</th><th>Contract</th><th>GP</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>OVR</th><th>Honors</th></tr></thead><tbody>{[...player.history].reverse().map((season,index)=><tr key={`${season.year}-${season.teamId}-${index}`}><td><strong>{season.year}</strong></td><td>{season.age}</td><td>{season.jerseyNumber!=null?`#${season.jerseyNumber}`:"—"}</td><td>{season.teamId?<LinkButton onClick={()=>onTeam(season.teamId)}>{season.team}</LinkButton>:season.team}</td><td>{season.competitionId!=='free-agency'?<LinkButton onClick={()=>onCompetition(season.competitionId)}>{season.competition}</LinkButton>:season.competition}</td><td>{season.contract?`${season.contract.salaryTier} · ${season.contract.endYear}`:'—'}</td><td>{season.games}</td><td>{season.ppg}</td><td>{season.rpg}</td><td>{season.apg}</td><td>{season.spg}</td><td>{season.bpg}</td><td><strong>{season.current}</strong></td><td>{formatHonorList(season.honors)}</td></tr>)}</tbody></table></div></section>}
     {tab==='International'&&<section className="panel"><SectionHeader title="National-team career" note="Olympics, World Cup and continental championships"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Country</th><th>Tournament</th><th>Result</th><th>GP</th><th>PTS</th><th>REB</th><th>AST</th></tr></thead><tbody>{[...(player.internationalHistory??[])].reverse().map((season,index)=><tr key={`${season.year}-${season.competitionId}-${index}`}><td>{season.year}</td><td>{season.team}</td><td><LinkButton onClick={()=>onCompetition(season.competitionId)}>{season.competition}</LinkButton></td><td>{season.result}</td><td>{season.games}</td><td>{season.ppg}</td><td>{season.rpg}</td><td>{season.apg}</td></tr>)}</tbody></table></div>{!player.internationalHistory?.length&&<div className="empty-state">No senior international tournament yet.</div>}</section>}
@@ -804,6 +1268,7 @@ function formatHonorList(items) {const labels=countedLabels(items??[]);return la
 function PlayerHonorsPanel({ honors }) {const years=unique(honors.map((h)=>h.year)).sort((a,b)=>Number(b)-Number(a));const allTitles=honors.filter((h)=>h.category==='team'||h.type==='Team title');const allAwards=honors.filter((h)=>!allTitles.includes(h));return <><section className="panel career-honor-summary"><SectionHeader title="Career honors" note="Repeated achievements are counted together"/><div className="two-column honor-summary-columns"><div><h3>Team titles</h3><HonorRow label="Titles" items={allTitles.map((h)=>h.competition)}/></div><div><h3>Individual awards</h3><HonorRow label="Awards" items={allAwards.map((h)=>`${h.competition} ${h.type}`)}/></div></div></section><section className="panel section-gap"><SectionHeader title="Honors by year" note={`${honors.length} tracked achievements`}/><div className="honors-timeline">{years.map((year)=>{const rows=honors.filter((h)=>String(h.year)===String(year));const titles=rows.filter((h)=>h.category==='team'||h.type==='Team title');const awards=rows.filter((h)=>!titles.includes(h));return <article className="honor-year" key={year}><h3>{year}</h3><div className="honor-year-content"><HonorRow label="Titles" items={titles.map((h)=>h.competition)}/><HonorRow label="Awards" items={awards.map((h)=>`${h.competition} ${h.type}`)}/></div></article>;})}</div>{!years.length&&<div className="empty-state">No honors yet.</div>}</section></>;}
 function HonorRow({label,items}) {const counted=countedLabels(items);return <div className="honor-row"><strong>{label}</strong><div>{counted.length?counted.map((item,index)=><span className="honor-chip" key={`${item}-${index}`}>{item}</span>):<small>—</small>}</div></div>;}
 
+function FranchiseFivePanel({team,universe,onPlayer}) {const rows=franchiseFiveFor(team,universe);return <section className="panel section-gap"><SectionHeader title="Franchise all-time five" note="Best simulated career at each position for this club"/><div className="franchise-five-grid">{rows.map(({player,seasons})=><button key={player.id} onClick={()=>onPlayer(player)} className={`franchise-five-card rarity-surface-${player.rarity.toLowerCase()}`}><PlayerPortrait player={player} size={64}/><span>{player.position}</span><strong>{player.name}</strong><small>{seasons} seasons · {player.honors.filter((h)=>h.teamId===team.id).length} team-specific honors</small></button>)}</div>{!rows.length&&<div className="empty-state">The franchise needs completed seasons before an all-time five can emerge.</div>}</section>;}
 function TeamHonorsPanel({honors}) {const years=unique(honors.map((h)=>h.year)).sort((a,b)=>Number(b)-Number(a));return <section className="panel"><SectionHeader title="Trophy cabinet" note={`${honors.length} titles`}/><div className="honors-timeline">{years.map((year)=><article className="honor-year" key={year}><h3>{year}</h3><div className="honor-year-content"><HonorRow label="Titles" items={honors.filter((h)=>String(h.year)===String(year)).map((h)=>h.competition)}/></div></article>)}</div>{!years.length&&<div className="empty-state">No titles yet.</div>}</section>;}
 function RetiredJerseysPanel({team,onPlayer}) {const rows=[...(team.retiredJerseys??[])].sort((a,b)=>Number(b.year)-Number(a.year)||Number(a.number)-Number(b.number));return <section className="panel"><SectionHeader title="Retired jerseys" note="Reserved for extraordinary team-specific careers"/><div className="retired-jersey-grid">{rows.map((entry)=><button className="retired-jersey-card" key={`${entry.number}-${entry.playerId}`} onClick={()=>onPlayer(entry.playerId)}><span>#{entry.number}</span><strong>{entry.player}</strong><small>{entry.year} · {entry.seasons} seasons</small><p>{entry.titles} titles · {entry.mvps+Number(entry.finalsMvps??0)} major MVPs · {entry.firstFive} best-five · {entry.leaders??0} leaders</p></button>)}</div>{!rows.length&&<div className="empty-state">No number has reached the club's retirement standard yet.</div>}</section>;}
 function TeamMovementHistory({team,universe,onPlayer,onCoach}) {

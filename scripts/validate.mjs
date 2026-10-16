@@ -246,7 +246,8 @@ showcaseUniverse = simulateWeeks(showcaseUniverse, 50);
 assert(showcaseUniverse.showcase?.active && showcaseUniverse.showcase.games.length >= 8, 'Showcase queue was not created.');
 assert(showcaseUniverse.showcase.games.some((game)=>game.competitionId==='nba' && game.round==='NBA Finals'), 'NBA Finals showcase games are missing.');
 assert(showcaseUniverse.showcase.games.some((game)=>game.competitionId==='ncaa-tournament' && game.round==='Final Four'), 'March Madness Final Four showcase games are missing.');
-assert(showcaseUniverse.showcase.games.every((game)=>game.timeline.length>0 && game.boxA.length>=5 && game.boxB.length>=5 && game.mvp?.playerId), 'Showcase game detail is incomplete.');
+assert(showcaseUniverse.showcase.games.every((game)=>game.timeline.length>0 && game.timeline.every((tick)=>Number.isFinite(tick.differential)) && game.boxA.length>=5 && game.boxB.length>=5 && game.mvp?.playerId && game.teamAColor && game.teamBColor), 'Showcase game detail is incomplete.');
+assert(showcaseUniverse.showcase.games.some((game)=>game.isChampionshipClincher), 'Showcase queue has no championship-clinching presentation.');
 let showcaseGuard=0;
 while(showcaseUniverse.showcase?.active && showcaseGuard<100){ showcaseUniverse=skipCurrentShowcaseGame(showcaseUniverse); showcaseUniverse=advanceShowcaseGame(showcaseUniverse); showcaseGuard+=1; }
 assert(showcaseUniverse.yearReview && showcaseUniverse.showcaseHistory?.[0]?.games?.length>=8, 'Showcase flow did not return to Year Review.');
