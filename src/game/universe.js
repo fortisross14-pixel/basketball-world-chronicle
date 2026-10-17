@@ -528,6 +528,14 @@ function teamTalentClass(team) {
   return 'Pro';
 }
 const ADRIATIC_CLUBS = new Set(['Partizan','Crvena zvezda','Cedevita Olimpija','Buducnost','Mega Basket','FMP Belgrade','Spartak Subotica','Borac Cacak','Borac Čačak','Cibona Zagreb','Split','Zadar','Krka Novo Mesto','Dubai Basketball']);
+const AMERICAS_CHAMPIONS_LEAGUE_CLUBS = new Set(['Boca Juniors','Instituto Córdoba','Quimsa','San Lorenzo','Flamengo','Franca','Minas Tênis Clube','Bauru Basket','Scarborough Shooting Stars','Vancouver Bandits','Calgary Surge','Niagara River Lions']);
+function attachAmericasChampionsLeague(team) {
+  if (!AMERICAS_CHAMPIONS_LEAGUE_CLUBS.has(team.name)) return;
+  team.secondaryCompetitions ??= [];
+  team.secondaryCompetitionIds ??= [];
+  if (!team.secondaryCompetitions.includes('Americas Champions League')) team.secondaryCompetitions.push('Americas Champions League');
+  if (!team.secondaryCompetitionIds.includes('americas-champions-league')) team.secondaryCompetitionIds.push('americas-champions-league');
+}
 
 function createTeams() {
   let id = 1;
@@ -566,6 +574,7 @@ function createTeams() {
   EXTENDED_PRO_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'Europe', competition: team.league, type: 'Pro', secondaryCompetitions: [...(EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : []), ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
   EXPANDED_REAL_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'World', competition: team.league, type: 'Pro', secondaryCompetitions: [...(EUROCUP_CLUBS.has(team.name) ? ['EuroCup'] : []), ...(ADRIATIC_CLUBS.has(team.name) ? ['Adriatic League'] : [])] }));
   SUMMARY_REAL_TEAMS.forEach((team) => add({ ...team, region: REGION_BY_COUNTRY[team.country] ?? 'World', competition: team.league, type: 'Pro', tier: 1, secondaryCompetitions: [] }));
+  teams.forEach(attachAmericasChampionsLeague);
   return teams;
 }
 
@@ -1093,7 +1102,7 @@ export function createUniverse(seed = 20260729) {
   initializeSeasonRecords(teams);
   teams = recalculateTeamRatings(teams, players, coaches, owners);
   return {
-    version: 11, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
+    version: 12, seed, rngState: shell.rngState ?? (seed >>> 0), year: 2026, week: 1, phase: 'Season setup', yearReview: false,
     finalizedYear: null, teams, players, coaches, owners, retiredPlayers: [], retiredCoaches: [], formerOwners: [],
     transactions: [], coachTransactions: [], retirements: [], freeAgencyHistory: [], freeAgents: initialFreeAgents,
     draftHistory: [], draftRights: [], spawnHistory: [], talentHistory: [], offseasonHistory: [], offseason: null, results: [], promotions: [], competitionHistory: {}, hallOfFame: { nba: [], fiba: [] }, legacyHistory: [],

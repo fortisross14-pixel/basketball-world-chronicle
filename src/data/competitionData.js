@@ -17,6 +17,7 @@ export const CORE_COMPETITIONS = [
   { id: 'euroleague', name: 'EuroLeague', region: 'Europe', country: 'Europe', kind: 'continental', level: 9, detail: 'detailed', featured: true },
   { id: 'eurocup', name: 'EuroCup', region: 'Europe', country: 'Europe', kind: 'continental', level: 7, detail: 'detailed', featured: true },
   { id: 'adriatic-league', name: 'Adriatic League', region: 'Europe', country: 'Balkans', kind: 'continental', level: 7, detail: 'detailed', featured: true },
+  { id: 'americas-champions-league', name: 'Americas Champions League', region: 'Americas', country: 'Americas', kind: 'continental', level: 8, detail: 'detailed', featured: true },
 ];
 
 export const INTERNATIONAL_COMPETITIONS = [

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  advanceToNextYear,
   advanceOffseasonStage,
   advanceShowcaseGame,
   checkpointShowcaseGame,
@@ -24,16 +23,18 @@ import { isCompetitionActive } from './data/competitionData.js';
 import { DETAILED_COUNTRY_SPECS, SUMMARY_COUNTRY_SPECS } from './data/worldData.js';
 import { TeamBadge, PlayerPortrait, CoachPortrait, CompetitionEmblem, RatingPill } from './components/VisualIdentity.jsx';
 
-const NAV = ['World','Events','People','Market','Chronicle'];
+const NAV = ['World','Live Game','Events','People','Market','Chronicle'];
 const NAV_GROUPS = {
   World: ['World','Teams','Tournaments'],
+  'Live Game': ['Live Game'],
   Events: ['Tournaments','Results'],
   People: ['Players','Coaches','Statistics'],
   Market: ['Market'],
   Chronicle: ['The Global Five','Almanac','Results'],
 };
-const NAV_DEFAULTS = {World:'World',Events:'Tournaments',People:'Players',Market:'Market',Chronicle:'The Global Five'};
+const NAV_DEFAULTS = {World:'World','Live Game':'Live Game',Events:'Tournaments',People:'Players',Market:'Market',Chronicle:'The Global Five'};
 function activeNavigationGroup(view) {
+  if (view === 'Live Game') return 'Live Game';
   if (view === 'Market') return 'Market';
   if (['Players','Coaches','Statistics'].includes(view)) return 'People';
   if (view === 'Results') return 'Events';
@@ -100,10 +101,20 @@ function currentLeaders(universe, competition) {
 function competitionInRegion(competition, region) {
   if (region === 'All') return true;
   if (region === 'World') return competition.region === 'World';
+  if (competition.region === 'Americas' && ['Americas','North America','South America'].includes(region)) return true;
   return competition.region === region || competition.countries?.includes(region);
 }
+function competitionResultLocked(universe, competitionId) {
+  if (!universe.showcase?.active) return false;
+  return (universe.showcase.games ?? []).some((game) => game.competitionId === competitionId && (game.completedTicks ?? 0) < (game.timeline?.length ?? 0));
+}
+function latestVisibleSeason(universe, competitionId) {
+  const rows = universe.competitionHistory?.[competitionId] ?? [];
+  if (!competitionResultLocked(universe, competitionId)) return rows[0] ?? null;
+  return rows.find((row) => Number(row.year) < Number(universe.year)) ?? null;
+}
 
-const MAJOR_COMPETITION_IDS = ['nba','euroleague','ncaa-tournament','olympic-basketball-tournament','fiba-world-cup','eurobasket','fiba-americup','afrobasket','fiba-asia-cup'];
+const MAJOR_COMPETITION_IDS = ['nba','euroleague','americas-champions-league','ncaa-tournament','olympic-basketball-tournament','fiba-world-cup','eurobasket','fiba-americup','afrobasket','fiba-asia-cup'];
 const MAJOR_COMPETITION_SET = new Set(MAJOR_COMPETITION_IDS);
 function allUniversePlayers(universe) { return [...(universe.players??[]), ...(universe.retiredPlayers??[])]; }
 function majorSeasonRows(universe, year) {
@@ -170,7 +181,7 @@ function franchiseFiveFor(team,universe) {
   const players=allUniversePlayers(universe); return POSITION_ORDER.map((position)=>players.filter((p)=>p.position===position&&(p.history??[]).some((h)=>h.teamId===team.id)).map((p)=>{const seasons=(p.history??[]).filter((h)=>h.teamId===team.id);const teamHonors=(p.honors??[]).filter((h)=>h.teamId===team.id).length;const best=Math.max(...seasons.map((h)=>Number(h.current)||0),0);return{player:p,score:best+seasons.length*1.5+teamHonors*2.2,seasons:seasons.length};}).sort((a,b)=>b.score-a.score)[0]).filter(Boolean);
 }
 
-const NAV_ROUTES = { World:'world', Results:'results', Tournaments:'tournaments', Teams:'teams', Players:'players', Coaches:'coaches', Market:'market/summary', Statistics:'statistics', 'The Global Five':'magazine', Almanac:'almanac' };
+const NAV_ROUTES = { World:'world', 'Live Game':'game', Results:'results', Tournaments:'tournaments', Teams:'teams', Players:'players', Coaches:'coaches', Market:'market/summary', Statistics:'statistics', 'The Global Five':'magazine', Almanac:'almanac' };
 const MARKET_ROUTE_TO_TAB = { summary:'Offseason Summary', trades:'Trades', transfers:'Transfers', draft:'Draft', rights:'Rights', 'free-agency':'Free Agency', retirements:'Retirements', legacy:'Hall of Fame', spawn:'Spawn', coaches:'Coaches' };
 const MARKET_TAB_TO_ROUTE = Object.fromEntries(Object.entries(MARKET_ROUTE_TO_TAB).map(([routeName, tabName]) => [tabName, routeName]));
 function parseHashRoute() {
@@ -203,8 +214,14 @@ function normalizeUniverseForUi(universe) {
   universe.legacyHistory ??= [];
   universe.followedPlayerIds ??= [];
   if (!universe.teams?.every((team) => team.type === 'National' || team.strengthProfile)) universe.teams = recalculateTeamRatings(universe.teams, universe.players, universe.coaches, universe.owners);
-  universe.version = 11;
+  universe.version = 12;
+  const americasClubs = new Set(['Boca Juniors','Instituto Córdoba','Quimsa','San Lorenzo','Flamengo','Franca','Minas Tênis Clube','Bauru Basket','Scarborough Shooting Stars','Vancouver Bandits','Calgary Surge','Niagara River Lions']);
   universe.teams?.forEach((team) => {
+    if (americasClubs.has(team.name)) {
+      team.secondaryCompetitions ??= []; team.secondaryCompetitionIds ??= [];
+      if (!team.secondaryCompetitions.includes('Americas Champions League')) team.secondaryCompetitions.push('Americas Champions League');
+      if (!team.secondaryCompetitionIds.includes('americas-champions-league')) team.secondaryCompetitionIds.push('americas-champions-league');
+    }
     if (team.type === 'NBA') team.localMinimum = 0;
     team.unavailablePlayers ??= [];
     team.selectionCompetition ??= 'International window';
@@ -238,7 +255,6 @@ export default function App() {
   const [view, setView] = useState('World');
   const [marketTab, setMarketTab] = useState('Offseason Summary');
   const [showPresentationSettings, setShowPresentationSettings] = useState(false);
-  const [showShowcasePanel, setShowShowcasePanel] = useState(true);
   const [detail, setDetail] = useState(null);
   const [route, setRoute] = useState(() => parseHashRoute());
   const saveQueueRef = useRef(Promise.resolve());
@@ -263,15 +279,12 @@ export default function App() {
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
   useEffect(() => {
-    const viewMap = { world:'World', results:'Results', tournaments:'Tournaments', teams:'Teams', players:'Players', coaches:'Coaches', market:'Market', statistics:'Statistics', magazine:'The Global Five', almanac:'Almanac', region:'Tournaments', country:'Tournaments', competition:'Tournaments', 'national-team':'Tournaments', team:'Teams', player:'Players', coach:'Coaches' };
+    const viewMap = { world:'World', game:'Live Game', results:'Results', tournaments:'Tournaments', teams:'Teams', players:'Players', coaches:'Coaches', market:'Market', statistics:'Statistics', magazine:'The Global Five', almanac:'Almanac', region:'Tournaments', country:'Tournaments', competition:'Tournaments', 'national-team':'Tournaments', team:'Teams', player:'Players', coach:'Coaches' };
     if (viewMap[route.page]) setView(viewMap[route.page]);
     if (route.page === 'market' && route.id) setMarketTab(MARKET_ROUTE_TO_TAB[route.id] ?? 'Transfers');
     if (['team','national-team','player','coach','competition'].includes(route.page)) setDetail({ type: route.page === 'national-team' ? 'team' : route.page, id: Number.isNaN(Number(route.id)) ? route.id : Number(route.id) });
     else setDetail(null);
   }, [route]);
-  useEffect(() => {
-    if (universe?.showcase?.active) setShowShowcasePanel(true);
-  }, [universe?.showcase?.active, universe?.showcase?.currentIndex]);
 
   const persistUniverse = (nextUniverse = universe) => {
     if (!activeSlot || !nextUniverse) return Promise.resolve(true);
@@ -326,7 +339,7 @@ export default function App() {
       setView('World');
       setDetail(null);
       goToRoute('world', true);
-      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 11 ? 'Older save loaded — v1.0 adds the full Nexus-style event, year-end and Chronicle presentation. Existing worlds remain playable.' : 'Save loaded');
+      setSaveStatus((record.version ?? loadedUniverse.version ?? 7) < 12 ? 'v1.0 save upgraded to v1.01 — Live Game, spoiler-safe showcases, Americas Champions League and expanded browsing are active.' : 'Save loaded');
     } catch (error) {
       setSaveStatus(`Load failed: ${error.message}`);
     } finally {
@@ -399,16 +412,23 @@ export default function App() {
     catch (error) { setSaveStatus(`Game simulation error: ${error.message}`); }
   };
   const beginOffseason = () => {
-    try { commitUniverse(startOffseason(universe)); }
-    catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
+    try {
+      const next = startOffseason(universe);
+      commitUniverse(next);
+      setMarketTab('Retirements');
+      goToRoute('market/retirements');
+    } catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
   };
   const runOffseasonStage = () => {
-    try { commitUniverse(advanceOffseasonStage(universe)); }
-    catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
-  };
-  const finishOffseason = () => {
-    try { commitUniverse(advanceToNextYear(universe)); }
-    catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
+    try {
+      const stageIndex = universe.offseason?.stageIndex ?? 0;
+      const next = advanceOffseasonStage(universe);
+      commitUniverse(next);
+      const tabs = ['Retirements','Draft','Trades','Free Agency','Offseason Summary'];
+      const routes = ['retirements','draft','trades','free-agency','summary'];
+      setMarketTab(tabs[stageIndex] ?? 'Offseason Summary');
+      goToRoute(`market/${routes[stageIndex] ?? 'summary'}`);
+    } catch (error) { setSaveStatus(`Offseason error: ${error.message}`); }
   };
 
   const presentationReady = universe.presentation?.confirmedYear === universe.year;
@@ -419,9 +439,9 @@ export default function App() {
     <section className="simulation-toolbar global-simulation">
       <div className="simulation-label"><strong>{universe.showcase?.active ? 'Postseason showcase' : universe.yearReview ? 'Season complete' : 'Advance the world'}</strong><span>{universe.showcase?.active ? `Game ${universe.showcase.currentIndex + 1} of ${universe.showcase.games.length}` : !presentationReady && !universe.yearReview ? 'Choose which major tournament games you want to stop and watch.' : 'Simulation controls stay above the menus.'}</span></div>
       {!universe.showcase?.active && !universe.yearReview && <><button className="button primary" disabled={!presentationReady} onClick={() => runWeeks(1)}>1 week</button><button className="button" disabled={!presentationReady} onClick={() => runWeeks(4)}>4 weeks</button><button className="button" disabled={!presentationReady} onClick={() => runWeeks(50)}>To postseason</button><button className="button subtle" onClick={() => setShowPresentationSettings((value)=>!value)}>{presentationReady ? 'Edit presentation' : 'Set presentation'}</button></>}
-      {universe.showcase?.active && <button className="button primary" onClick={() => setShowShowcasePanel((value)=>!value)}>{showShowcasePanel ? 'Hide game' : 'Open game'}</button>}
+      {universe.showcase?.active && showcaseGame && <><div className="next-game-toolbar"><span>NEXT GAME</span><strong>{showcaseGame.teamA} vs {showcaseGame.teamB}</strong><small>{showcaseGame.competition} · {showcaseGame.round}{showcaseGame.competitionId==='nba'?` · Game ${showcaseGame.gameNumber}`:''}</small></div><button className="button primary" onClick={() => navigate('Live Game')}>Open Live Game</button></>}
       {universe.yearReview && !universe.offseason?.active && <button className="button primary" onClick={beginOffseason}>Start offseason</button>}
-      {universe.offseason?.active && <><button className="button primary" onClick={runOffseasonStage}>Run {OFFSEASON_STAGES[universe.offseason.stageIndex]}</button><button className="button" onClick={finishOffseason}>Finish offseason</button></>}
+      {universe.offseason?.active && <button className="button primary" onClick={runOffseasonStage}>Run {OFFSEASON_STAGES[universe.offseason.stageIndex]}</button>}
       <div className="toolbar-note">Slot {activeSlot} · {clubTeams.length} pro teams × 10 · {ncaaTeams.length} NCAA starting fives</div>
     </section>
     <nav className="main-nav" aria-label="Main sections">{NAV.map((item) => <button key={item} className={activeNavigationGroup(view) === item ? 'active' : ''} onClick={() => navigate(NAV_DEFAULTS[item])}>{item}</button>)}</nav>
@@ -430,11 +450,11 @@ export default function App() {
       {universe.yearReview && !universe.offseason?.active && <YearEndExperience universe={universe} onTeam={openTeam} onPlayer={openPlayer} onStartOffseason={beginOffseason}/>}
       {universe.offseason?.active && <div className="year-review-banner offseason"><strong>Offseason stage {universe.offseason.stageIndex + 1}/{OFFSEASON_STAGES.length}.</strong> {OFFSEASON_STAGES[universe.offseason.stageIndex]}. You can inspect Market after every stage before continuing.</div>}
       {(!presentationReady || showPresentationSettings) && !universe.yearReview && !universe.offseason?.active && !universe.showcase?.active && <SeasonPresentationSetup universe={universe} onConfirm={confirmPresentation} />}
-      {universe.showcase?.active && showcaseGame && showShowcasePanel && <GameShowcaseView game={showcaseGame} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onCheckpoint={checkpointShowcase} onSkip={skipShowcase} onNext={nextShowcase} onPlayer={openPlayer} onClose={() => setShowShowcasePanel(false)} />}
-      {universe.showcase?.active && showcaseGame && !showShowcasePanel && <div className="showcase-dock panel"><div><strong>{showcaseGame.competition} · {showcaseGame.round}{showcaseGame.competitionId==='nba'?` · Game ${showcaseGame.gameNumber}`:''}</strong><span>Game is paused. Browse any menu and return when you are ready.</span></div><button className="button primary" onClick={()=>setShowShowcasePanel(true)}>Open game</button></div>}
+      {universe.showcase?.active && showcaseGame && view !== 'Live Game' && !detail && <NextGameDock game={showcaseGame} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onOpen={()=>navigate('Live Game')} onPlayer={openPlayer} onTeam={openTeam}/>}
       <Breadcrumbs route={route} universe={universe} teamById={teamById} playerById={playerById} />
       {route.page === 'region' ? <RegionPage region={route.id} universe={universe} onCompetition={openCompetition} onCountry={openCountry} onTeam={openTeam} /> : route.page === 'country' ? <CountryPage country={route.id} universe={universe} onCompetition={openCompetition} onTeam={openTeam} onPlayer={openPlayer} /> : detail ? <DetailRouter detail={detail} universe={universe} teamById={teamById} playerById={playerById} coachById={coachById} onBack={() => window.history.back()} onTeam={openTeam} onPlayer={openPlayer} onCoach={openCoach} onCompetition={openCompetition} onToggleFollow={toggleFollowPlayer} /> : <>
         {view === 'World' && <WorldView universe={universe} setView={navigate} setMarketTab={setMarketTab} onTeam={openTeam} onPlayer={openPlayer} />}
+        {view === 'Live Game' && <LiveGameScreen universe={universe} game={showcaseGame} onCheckpoint={checkpointShowcase} onSkip={skipShowcase} onNext={nextShowcase} onPlayer={openPlayer} onTeam={openTeam} onBrowse={()=>navigate('World')} />}
         {view === 'Results' && <ResultsView universe={universe} onPlayer={openPlayer} onTeam={openTeam} onCompetition={openCompetition} />}
         {view === 'Tournaments' && <TournamentsView universe={universe} onCompetition={openCompetition} onRegion={openRegion} onCountry={openCountry} />}
         {view === 'Teams' && <TeamsView universe={universe} onTeam={openTeam} />}
@@ -447,7 +467,7 @@ export default function App() {
       </>}
     </main>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {[['World','⌂'],['Events','🏆'],['People','♟'],['Market','⇄'],['Chronicle','★']].map(([item,icon])=><button key={item} className={activeNavigationGroup(view)===item?'active':''} onClick={()=>navigate(NAV_DEFAULTS[item])}><span>{icon}</span><small>{item}</small></button>)}
+      {[['World','⌂'],['Live Game','●'],['Events','🏆'],['People','♟'],['Market','⇄'],['Chronicle','★']].map(([item,icon])=><button key={item} className={activeNavigationGroup(view)===item?'active':''} onClick={()=>navigate(NAV_DEFAULTS[item])}><span>{icon}</span><small>{item}</small></button>)}
     </nav>
   </div>;
 }
@@ -721,17 +741,12 @@ function LeadChart({ game, tick }) {
   return <div className="lead-chart-wrap">
     <div className="lead-chart-label top"><span>{game.teamA}</span><strong>+{scale}</strong></div>
     <svg className="lead-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Lead chart for ${game.teamA} versus ${game.teamB}`}>
-      <defs>
-        <linearGradient id={`lead-bg-${game.id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={game.teamAColor||'#315d9b'} stopOpacity=".14"/>
-          <stop offset="49%" stopColor={game.teamAColor||'#315d9b'} stopOpacity=".03"/>
-          <stop offset="51%" stopColor={game.teamBColor||'#b43843'} stopOpacity=".03"/>
-          <stop offset="100%" stopColor={game.teamBColor||'#b43843'} stopOpacity=".14"/>
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width={width} height={height} rx="16" fill={`url(#lead-bg-${game.id})`}/>
-      {[.25,.5,.75].map((fraction)=><line key={fraction} x1={padX} x2={width-padX} y1={height*fraction} y2={height*fraction} stroke="rgba(100,116,139,.14)" strokeDasharray="5 6"/>)}
-      <line x1={padX} x2={width-padX} y1={mid} y2={mid} stroke="rgba(15,23,42,.38)" strokeWidth="1.5"/>
+      <rect x="0" y="0" width={width} height={mid} rx="16" fill={game.teamAColor||'#315d9b'} fillOpacity=".16"/>
+      <rect x="0" y={mid} width={width} height={mid} rx="16" fill={game.teamBColor||'#b43843'} fillOpacity=".16"/>
+      <rect x="0" y={height*.25} width={width} height={height*.25} fill="white" fillOpacity=".34"/>
+      <rect x="0" y={height*.75} width={width} height={height*.25} fill="white" fillOpacity=".34"/>
+      {[.25,.5,.75].map((fraction)=><line key={fraction} x1={padX} x2={width-padX} y1={height*fraction} y2={height*fraction} stroke="rgba(30,52,78,.24)" strokeWidth={fraction===.5?1.8:1}/>) }
+      <line x1={padX} x2={width-padX} y1={mid} y2={mid} stroke="rgba(15,23,42,.52)" strokeWidth="2"/>
       <polyline points={points} fill="none" stroke="#132238" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round"/>
       {entries.slice(1).map((entry,index)=>{
         const lead=entry.scoreA-entry.scoreB;
@@ -747,7 +762,7 @@ function LeadChart({ game, tick }) {
   </div>;
 }
 
-function LiveGameLeaders({ game, tick, current }) {
+function LiveGameLeaders({ game, tick, current, onPlayer }) {
   const liveA = liveBoxRows(game.boxA,tick,game.timeline.length,current.scoreA).map((row)=>({...row,team:game.teamA,color:game.teamAColor}));
   const liveB = liveBoxRows(game.boxB,tick,game.timeline.length,current.scoreB).map((row)=>({...row,team:game.teamB,color:game.teamBColor}));
   const all=[...liveA,...liveB];
@@ -760,7 +775,7 @@ function LiveGameLeaders({ game, tick, current }) {
     <div className="section-header compact"><div><div className="kicker">LIVE LEADERS</div><h3>Who is driving the game?</h3></div></div>
     <div className="leader-columns">{groups.map((group)=>{
       const leaders=[...all].sort((a,b)=>b[group.key]-a[group.key] || b.current-a.current).slice(0,3);
-      return <article key={group.key}><h4>{group.label}</h4>{leaders.map((row,index)=><div className="live-leader-row" key={`${group.key}-${row.playerId}`}><span className="leader-rank">{index+1}</span><span className="team-dot" style={{background:row.color||'#64748b'}}/><div><strong>{row.player}</strong><small>{row.team}</small></div><b>{row[group.key]} <small>{group.suffix}</small></b></div>)}</article>;
+      return <article key={group.key}><h4>{group.label}</h4>{leaders.map((row,index)=><button className="live-leader-row" key={`${group.key}-${row.playerId}`} onClick={()=>onPlayer(row.playerId)}><span className="leader-rank">{index+1}</span><span className="team-dot" style={{background:row.color||'#64748b'}}/><div><strong>{row.player}</strong><small>{row.team}</small></div><b>{row[group.key]} <small>{group.suffix}</small></b></button>)}</article>;
     })}</div>
   </section>;
 }
@@ -808,12 +823,34 @@ function FinalResultView({ game, index, total, onNext, onPlayer, onClose }) {
       <button className="mvp-portrait-button" onClick={()=>onPlayer(game.mvp.playerId)}><PlayerPortrait player={{...mvpRow,name:game.mvp.player,rarity:mvpRow?.rarity||'Rare',position:mvpRow?.position||'—'}} size={126}/><span>View career →</span></button>
     </section>
     <MomentumPanel game={game} tick={game.timeline.length}/>
-    <LiveGameLeaders game={game} tick={game.timeline.length} current={{scoreA:game.scoreA,scoreB:game.scoreB}}/>
+    <LiveGameLeaders game={game} tick={game.timeline.length} current={{scoreA:game.scoreA,scoreB:game.scoreB}} onPlayer={onPlayer}/>
     <div className="showcase-box-grid"><GameBox team={game.teamA} score={game.scoreA} rows={game.boxA} onPlayer={onPlayer}/><GameBox team={game.teamB} score={game.scoreB} rows={game.boxB} onPlayer={onPlayer}/></div>
   </div>;
 }
 
-function GameShowcaseView({ game, index, total, onCheckpoint, onSkip, onNext, onPlayer, onClose }) {
+function ShowcaseTeamPreview({name,color,rows,teamId,onPlayer,onTeam,align='left'}) {
+  const stars=[...(rows??[])].sort((a,b)=>Number(b.current)-Number(a.current)||Number(b.points)-Number(a.points)).slice(0,2);
+  return <div className={`showcase-preview-team ${align}`} style={{'--preview-team-color':color||'#315d9b'}}>
+    <button className="showcase-preview-club" onClick={()=>onTeam?.(teamId)}><TeamBadge team={{name,color}} size={68}/><strong>{name}</strong></button>
+    <div className="preview-people">{stars.map((player)=><button key={player.playerId} onClick={()=>onPlayer(player.playerId)} title={`Open ${player.player}`}><PlayerPortrait player={player} team={{name,color}} size={48}/><span><b>{player.player}</b><small>{player.position} · {player.current} OVR</small></span></button>)}</div>
+  </div>;
+}
+
+function NextGameDock({game,index,total,onOpen,onPlayer,onTeam}) {
+  if(!game) return null;
+  const progress=game.completedTicks>0?`${Math.round(game.completedTicks/Math.max(1,game.timeline.length)*100)}% played`:'Result hidden · not started';
+  return <section className="next-game-dock panel">
+    <div className="next-game-dock-head"><div><div className="kicker">NEXT GAME · {index+1}/{total}</div><h2>{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</h2><p>{progress}. The winner and final score stay hidden until you play or skip this game.</p></div>{onOpen&&<button className="button primary" onClick={onOpen}>{game.completedTicks>0?'Resume Live Game':'Open Live Game'}</button>}</div>
+    <div className="showcase-preview-matchup"><ShowcaseTeamPreview name={game.teamA} color={game.teamAColor} rows={game.boxA} teamId={game.teamAId} onPlayer={onPlayer} onTeam={onTeam}/><div className="preview-vs"><span>VS</span><small>showcase</small></div><ShowcaseTeamPreview name={game.teamB} color={game.teamBColor} rows={game.boxB} teamId={game.teamBId} onPlayer={onPlayer} onTeam={onTeam} align="right"/></div>
+  </section>;
+}
+
+function LiveGameScreen({universe,game,onCheckpoint,onSkip,onNext,onPlayer,onTeam,onBrowse}) {
+  if(!universe.showcase?.active||!game) return <section className="panel live-game-empty"><div className="kicker">LIVE GAME</div><h2>No showcase game is waiting</h2><p>Selected semifinal/final games appear here when the season simulation reaches the postseason. Results remain hidden until each game is played or skipped.</p><button className="button primary" onClick={onBrowse}>Back to World</button></section>;
+  return <><NextGameDock game={game} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onOpen={null} onPlayer={onPlayer} onTeam={onTeam}/><GameShowcaseView game={game} index={universe.showcase.currentIndex} total={universe.showcase.games.length} onCheckpoint={onCheckpoint} onSkip={onSkip} onNext={onNext} onPlayer={onPlayer} onTeam={onTeam} onClose={onBrowse}/></>;
+}
+
+function GameShowcaseView({ game, index, total, onCheckpoint, onSkip, onNext, onPlayer, onTeam, onClose }) {
   const [tick, setTick] = useState(game.completedTicks ?? 0);
   const [playing, setPlaying] = useState(false);
   const [targetTick, setTargetTick] = useState(null);
@@ -845,14 +882,14 @@ function GameShowcaseView({ game, index, total, onCheckpoint, onSkip, onNext, on
   return <div className="showcase-page">
     <div className="showcase-meta"><div><div className="kicker">{game.competition} · {game.round}{game.competitionId==='nba'?` · Game ${game.gameNumber}`:''}</div><h2>Live showcase</h2><p>Watch the shape of the game change minute by minute. The chart, leaders and momentum all update together.</p></div><div className="showcase-actions">{!playing?<button className="button primary" onClick={playNextPeriod}>{`Play ${game.periodLabels[nextPeriodIndex]}`}</button>:<button className="button primary pause-button" onClick={pause}>Pause</button>}<button className="button" disabled={playing} onClick={skip}>Skip to final</button><button className="button subtle dark-text" onClick={browse}>Browse world</button></div></div>
     <section className="live-scoreboard panel premium-scoreboard visual-scoreboard" style={{'--team-a':game.teamAColor||'#315d9b','--team-b':game.teamBColor||'#b43843'}}>
-      <div className="showcase-team"><TeamBadge team={{name:game.teamA,color:game.teamAColor||'#315d9b'}} size={70}/><div><strong>{game.teamA}</strong><span>{current.scoreA}</span></div>{scoringPopA&&<em className="score-pop score-pop-a" key={`a-${tick}`}>+{current.deltaA}</em>}</div>
+      <div className="showcase-team"><button className="scoreboard-team-link" onClick={()=>onTeam?.(game.teamAId)}><TeamBadge team={{name:game.teamA,color:game.teamAColor||'#315d9b'}} size={70}/><strong>{game.teamA}</strong></button><div className="scoreboard-score"><span>{current.scoreA}</span></div>{scoringPopA&&<em className="score-pop score-pop-a" key={`a-${tick}`}>+{current.deltaA}</em>}</div>
       <div className="showcase-clock"><strong>{displayStatus}</strong><small>{game.competition}</small><div className="speed-controls"><span>Speed</span>{[1,2,4].map((value)=><button key={value} className={speed===value?'active':''} onClick={()=>setSpeed(value)}>{value}×</button>)}</div></div>
-      <div className="showcase-team away"><TeamBadge team={{name:game.teamB,color:game.teamBColor||'#b43843'}} size={70}/><div><strong>{game.teamB}</strong><span>{current.scoreB}</span></div>{scoringPopB&&<em className="score-pop score-pop-b" key={`b-${tick}`}>+{current.deltaB}</em>}</div>
+      <div className="showcase-team away"><button className="scoreboard-team-link" onClick={()=>onTeam?.(game.teamBId)}><TeamBadge team={{name:game.teamB,color:game.teamBColor||'#b43843'}} size={70}/><strong>{game.teamB}</strong></button><div className="scoreboard-score"><span>{current.scoreB}</span></div>{scoringPopB&&<em className="score-pop score-pop-b" key={`b-${tick}`}>+{current.deltaB}</em>}</div>
       {flow.moment&&<div className={`moment-pop ${flow.moment.type}`} key={`${flow.moment.type}-${tick}`}><span>{flow.moment.team||'KEY MOMENT'}</span><strong>{flow.moment.label}</strong></div>}
     </section>
     <section className="period-strip">{game.periodLabels.map((label,periodIndex)=>{const score=livePeriodScore(game,tick,periodIndex);return <article key={label} className={score?.complete?'complete':periodIndex===nextPeriodIndex?'current':''}><span>{label}</span><strong>{score?`${score.a}–${score.b}`:'—'}</strong></article>;})}</section>
     <MomentumPanel game={game} tick={tick}/>
-    <LiveGameLeaders game={game} tick={tick} current={current}/>
+    <LiveGameLeaders game={game} tick={tick} current={current} onPlayer={onPlayer}/>
     <section className="panel live-minute-panel"><div className="minute-progress"><span style={{width:`${Math.round(tick/Math.max(1,totalTicks)*100)}%`}}/></div><div className="live-minute-copy"><strong>{playing?`Running at ${speed}×`:'Paused'}</strong><span>{periodEnded&&tick<totalTicks?'Period complete. Take a look at the game flow before continuing.':'Each tick advances one game minute.'}</span></div></section>
   </div>;
 }
@@ -863,7 +900,7 @@ function GameBox({ team, score, rows, onPlayer }) {
 
 function SaveHome({ slots, onContinue, onNew, onDelete, status }) {
   const rows = [1, 2, 3].map((slot) => ({ slot, record: slots.find((item) => item.slot === slot) }));
-  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 11 && <small className="legacy-save-note">Older world: playable. v1.0 adds the Nexus-style simulation, year-end, offseason event and Chronicle presentation.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
+  return <div className="save-home"><header><div className="kicker">The Global Five presents</div><h1>Basketball World Chronicle</h1><p>Three independent universes. Saves are stored in IndexedDB, which has substantially more capacity than browser localStorage.</p></header><section className="save-slot-grid">{rows.map(({ slot, record }) => <article className={`save-slot ${record ? 'occupied' : 'empty'}`} key={slot}><div className="slot-number">Slot {slot}</div>{record ? <><h2>{record.name}</h2><div className="slot-season">{record.year} · Week {record.week}</div><p>{record.phase}{record.yearReview ? ' · Year review' : ''} · v{record.version ?? 7}</p>{(record.version ?? 7) < 12 && <small className="legacy-save-note">Older world: playable. v1.01 upgrades this world with the Live Game hub, spoiler-safe showcases, broader team browsing and the Americas Champions League.</small>}<small>Saved {new Date(record.updatedAt).toLocaleString()}</small><div className="slot-actions"><button className="button primary" onClick={() => onContinue(slot)}>Continue</button><button className="button" onClick={() => onNew(slot)}>New universe</button><button className="button danger" onClick={() => onDelete(slot)}>Delete</button></div></> : <><h2>Empty universe</h2><p>Begin a new basketball history in this slot.</p><div className="slot-actions"><button className="button primary" onClick={() => onNew(slot)}>Start new universe</button></div></>}</article>)}</section>{status && <div className="home-status">{status}</div>}</div>;
 }
 
 
@@ -895,7 +932,7 @@ function Breadcrumbs({ route, universe, teamById, playerById }) {
       add(competition.name, `competition/${competition.id}`);
     }
   }
-  if (crumbs.length <= 1 && ['world','results','tournaments','teams','players','coaches','market','statistics','magazine','almanac'].includes(route.page)) return null;
+  if (crumbs.length <= 1 && ['world','game','results','tournaments','teams','players','coaches','market','statistics','magazine','almanac'].includes(route.page)) return null;
   return <nav className="breadcrumbs" aria-label="Breadcrumb">{crumbs.map((crumb,index) => <React.Fragment key={crumb.path}><button onClick={() => goToRoute(crumb.path)}>{crumb.label}</button>{index < crumbs.length - 1 && <span>›</span>}</React.Fragment>)}</nav>;
 }
 
@@ -1018,20 +1055,31 @@ function TournamentsView({ universe, onCompetition, onRegion, onCountry }) {
   </>;
 }
 
-function CompetitionCards({ competitions, universe, onCompetition }) { return <div className="card-grid three competition-grid-modern">{competitions.map((competition) => { const teams = getCompetitionParticipants(universe, competition.id); const latest = universe.competitionHistory[competition.id]?.[0]; const active = isCompetitionActive(competition, universe.year); return <button className="competition-card competition-button modern-competition-card" key={competition.id} onClick={() => onCompetition(competition)}><div className="competition-visual-head"><CompetitionEmblem competition={competition} size={60}/><div><div className="kicker"><Flag value={competition.country || competition.region}/> {competition.country || competition.region} · {competition.kind}</div><h3>{competition.name}</h3></div></div><div className="competition-card-meta"><strong>{teams.length || latest?.standings?.length || 0} teams</strong><span className={active?'live-chip':''}>{active ? '● Active now' : competition.frequency ? `Every ${competition.frequency} years` : competition.detail}</span></div><div className="mini-badge-row">{teams.slice(0,6).map(team=><TeamMark team={team} size={28} key={team.id}/>)}</div><p>{latest ? `${latest.year}: ${latest.champion} · MVP ${latest.mvp.name}` : 'No completed edition yet.'}</p></button>; })}</div>; }
+function CompetitionCards({ competitions, universe, onCompetition }) { return <div className="card-grid three competition-grid-modern">{competitions.map((competition) => { const teams = getCompetitionParticipants(universe, competition.id); const locked=competitionResultLocked(universe,competition.id); const latest = latestVisibleSeason(universe,competition.id); const active = isCompetitionActive(competition, universe.year); return <button className="competition-card competition-button modern-competition-card" key={competition.id} onClick={() => onCompetition(competition)}><div className="competition-visual-head"><CompetitionEmblem competition={competition} size={60}/><div><div className="kicker"><Flag value={competition.country || competition.region}/> {competition.country || competition.region} · {competition.kind}</div><h3>{competition.name}</h3></div></div><div className="competition-card-meta"><strong>{teams.length || latest?.standings?.length || 0} teams</strong><span className={active?'live-chip':''}>{active ? '● Active now' : competition.frequency ? `Every ${competition.frequency} years` : competition.detail}</span></div><div className="mini-badge-row">{teams.slice(0,6).map(team=><TeamMark team={team} size={28} key={team.id}/>)}</div><p>{locked ? 'Current postseason result hidden until its selected showcase games are played.' : latest ? `${latest.year}: ${latest.champion} · MVP ${latest.mvp.name}` : 'No completed edition yet.'}</p></button>; })}</div>; }
 
 function TeamsView({ universe, onTeam }) {
-  const regions = unique(universe.teams.map((team) => team.region));
-  const [region, setRegion] = useState('North America');
-  const countries = unique(universe.teams.filter((team) => team.region === region).map((team) => team.country));
-  const [country, setCountry] = useState('USA');
+  const [region, setRegion] = useState('All');
+  const [country, setCountry] = useState('All');
   const [competition, setCompetition] = useState('All');
   const [search, setSearch] = useState('');
-  const safeCountry = countries.includes(country) ? country : countries[0];
-  const countryTeams = universe.teams.filter((team) => team.region === region && team.country === safeCountry);
-  const competitions = unique(countryTeams.flatMap((team) => [team.competition, ...team.secondaryCompetitions]));
-  const shown = countryTeams.filter((team) => (competition === 'All' || team.competition === competition || team.secondaryCompetitions.includes(competition)) && team.name.toLowerCase().includes(search.toLowerCase()));
-  return <><div className="page-heading"><div><div className="kicker">Teams</div><h2>Region → country → team history</h2></div><div className="page-note">Visual team identities, live strength and permanent history.</div></div><div className="tabs">{regions.map((item) => <button key={item} className={region === item ? 'active' : ''} onClick={() => {setRegion(item);setCountry(unique(universe.teams.filter((team)=>team.region===item).map((team)=>team.country))[0]);setCompetition('All');}}><Flag value={item}/> {item}</button>)}</div><div className="tabs countries">{countries.map((item)=><button key={item} className={safeCountry===item?'active':''} onClick={()=>{setCountry(item);setCompetition('All');}}><Flag value={item}/> {item}</button>)}</div><div className="filters compact"><Filter label="Competition"><select value={competition} onChange={(e)=>setCompetition(e.target.value)}><option>All</option>{competitions.map((item)=><option key={item}>{item}</option>)}</select></Filter><Filter label="Search"><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Team name"/></Filter></div><div className="card-grid four team-card-grid-modern">{shown.map((team)=><button className="team-card modern-team-card" key={team.id} onClick={()=>onTeam(team)} style={{'--team-color':team.color}}><div className="team-card-glow"/><div className="team-card-top"><TeamMark team={team} size={62}/><RatingPill value={team.rating}/></div><h3>{team.name}</h3><p><Flag value={team.country}/> {team.type==='NCAA'?team.secondaryCompetitions.at(-1):team.competition}</p><div className="tag-row"><span>{team.rosterIds.length} players</span><span>{team.honors.length} titles</span>{team.tier===2&&<span className="danger-tag">Tier 2</span>}{team.secondaryCompetitionIds.includes('euroleague')&&<span className="blue-tag">EuroLeague</span>}</div></button>)}</div></>;
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE=24;
+  const regions=['All',...unique(universe.teams.filter((team)=>team.type!=='National').map((team)=>team.region))];
+  const regionalTeams=universe.teams.filter((team)=>team.type!=='National'&&(region==='All'||team.region===region));
+  const countries=['All',...unique(regionalTeams.map((team)=>team.country))];
+  const safeCountry=countries.includes(country)?country:'All';
+  const scopedTeams=regionalTeams.filter((team)=>safeCountry==='All'||team.country===safeCountry);
+  const competitions=unique(scopedTeams.flatMap((team)=>[team.competition,...(team.secondaryCompetitions??[])]));
+  const shown=scopedTeams.filter((team)=>(competition==='All'||team.competition===competition||team.secondaryCompetitions?.includes(competition))&&team.name.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>b.rating-a.rating||a.name.localeCompare(b.name));
+  const pages=Math.max(1,Math.ceil(shown.length/PAGE_SIZE)); const safePage=Math.min(page,pages); const pageRows=shown.slice((safePage-1)*PAGE_SIZE,safePage*PAGE_SIZE);
+  const reset=()=>setPage(1);
+  return <><div className="page-heading"><div><div className="kicker">Teams</div><h2>All-world club browser</h2></div><div className="page-note">Remove geography filters entirely, browse a continent, or drill into one country. {shown.length} teams match.</div></div>
+    <div className="tabs">{regions.map((item)=><button key={item} className={region===item?'active':''} onClick={()=>{setRegion(item);setCountry('All');setCompetition('All');reset();}}>{item==='All'?'🌐':<Flag value={item}/>} {item}</button>)}</div>
+    <div className="tabs countries">{countries.map((item)=><button key={item} className={safeCountry===item?'active':''} onClick={()=>{setCountry(item);setCompetition('All');reset();}}>{item==='All'?'All countries':<><Flag value={item}/> {item}</>}</button>)}</div>
+    <div className="filters compact team-browser-filters"><Filter label="Competition"><select value={competition} onChange={(e)=>{setCompetition(e.target.value);reset();}}><option>All</option>{competitions.map((item)=><option key={item}>{item}</option>)}</select></Filter><Filter label="Search"><input value={search} onChange={(e)=>{setSearch(e.target.value);reset();}} placeholder="Team name"/></Filter></div>
+    <div className="card-grid four team-card-grid-modern">{pageRows.map((team)=><button className="team-card modern-team-card" key={team.id} onClick={()=>onTeam(team)} style={{'--team-color':team.color}}><div className="team-card-glow"/><div className="team-card-top"><TeamMark team={team} size={62}/><RatingPill value={team.rating}/></div><h3>{team.name}</h3><p><Flag value={team.country}/> {team.country} · {team.type==='NCAA'?team.secondaryCompetitions.at(-1):team.competition}</p><div className="tag-row"><span>{team.rosterIds.length} players</span><span>{team.honors.length} titles</span>{team.tier===2&&<span className="danger-tag">Tier 2</span>}{team.secondaryCompetitionIds.includes('euroleague')&&<span className="blue-tag">EuroLeague</span>}{team.secondaryCompetitionIds.includes('americas-champions-league')&&<span className="blue-tag">Americas CL</span>}</div></button>)}</div>
+    {pages>1&&<div className="pagination"><button className="button" disabled={safePage<=1} onClick={()=>setPage((n)=>Math.max(1,n-1))}>← Previous</button><span>Page <strong>{safePage}</strong> of {pages} · {shown.length} teams</span><button className="button" disabled={safePage>=pages} onClick={()=>setPage((n)=>Math.min(pages,n+1))}>Next →</button></div>}
+  </>;
 }
 
 function PlayersView({ universe, teamById, onPlayer }) {
@@ -1248,13 +1296,13 @@ function PlayerPage({ player, universe, onBack, onTeam, onCompetition, onToggleF
 function CoachPage({ coach, universe, onBack, onTeam }) { const [tab,setTab]=useState('Overview');const team=universe.teams.find((item)=>item.id===coach.teamId);return <><DetailHeader onBack={onBack}><div className={`entity-hero coach-entity-hero rarity-surface-${coach.rarity.toLowerCase()}`} style={{'--entity-color':team?.color||'#315d9b'}}><CoachPortrait coach={coach} team={team} size={112}/><div className="entity-hero-copy"><div className="kicker"><Flag value={coach.nationality}/> {coach.nationality} · {coach.age} · {coach.status}</div><h2>{coach.name}</h2><p>{team?<LinkButton onClick={()=>onTeam(team.id)}>{team.name}</LinkButton>:coach.teamName} · {coach.style}</p><div className="entity-chip-row"><Rarity value={coach.rarity}/><span>Base {coach.base}</span><span>{coach.careerYear+1}/{coach.careerYears} career year</span></div></div><RatingPill value={coach.current}/></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="Rarity" value={coach.rarity} detail="Permanent coaching tier"/><Metric label="Overall" value={coach.current} detail={`Base ${coach.base}`}/><Metric label="Career year" value={coach.careerYear+1} detail={`${coach.careerYears} projected years`}/><Metric label="Honors" value={coach.honors.length} detail="Team titles"/></div><DetailTabs tabs={['Overview','Career','Honors','Timeline']} tab={tab} setTab={setTab}/>{tab==='Overview'&&<div className="two-column"><section className="panel"><SectionHeader title="Coaching profile" note={coach.style}/><div className="coach-skill-grid">{[['Offense',coach.offense],['Defense',coach.defense],['Development',coach.development],['Rotations',coach.rotations],['Playoffs',coach.playoff],['Management',coach.management]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong><i style={{width:`${value}%`}}/></div>)}</div></section><section className="panel"><SectionHeader title="Appointment" note="Current status"/><InfoLine label="Team" value={team?team.name:coach.teamName}/><InfoLine label="Contract through" value={coach.contractEnd??'—'}/><InfoLine label="Career length" value={`${coach.careerYears} years`}/></section></div>}{tab==='Career'&&<section className="panel"><SectionHeader title="Annual coaching career" note="Team, record, ability and titles"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Team</th><th>Record</th><th>OVR</th><th>Titles</th></tr></thead><tbody>{[...coach.history].reverse().map((season,index)=><tr key={`${season.year}-${index}`}><td>{season.year}</td><td><LinkButton onClick={()=>onTeam(season.teamId)}>{season.team}</LinkButton></td><td>{season.record}</td><td>{season.current}</td><td>{season.titles.join(', ')||'—'}</td></tr>)}</tbody></table></div></section>}{tab==='Honors'&&<TeamHonorsPanel honors={coach.honors}/>} {tab==='Timeline'&&<section className="panel"><SectionHeader title="Coaching timeline" note="Appointments, firings and retirement"/>{[...coach.careerEvents].reverse().map((event,index)=><article className="timeline-event" key={`${event.year}-${index}`}><span>{event.year}</span><div><strong>{event.type}</strong><p>{event.detail}</p></div></article>)}</section>}</>; }
 
 function CompetitionPage({ competition, universe, onBack, onPlayer, onTeam }) {
-  const [tab,setTab]=useState('Overview'); const participants=getCompetitionParticipants(universe,competition.id); const histories=universe.competitionHistory[competition.id]??[]; const [bracketYear,setBracketYear]=useState(histories[0]?.year??universe.year); const latest=histories[0]; const standings=participants.map((team)=>{const record=team.seasonRecords[competition.id]??team.seasonRecords[team.competitionId]??{wins:0,losses:0};return{team,wins:record.wins,losses:record.losses,pct:record.wins/Math.max(1,record.wins+record.losses)};}).sort((a,b)=>b.pct-a.pct||b.team.rating-a.team.rating); const leaders=currentLeaders(universe,competition); const rankings=competitionRankings(universe,competition.id); const bracketSeason=histories.find((season)=>season.year===Number(bracketYear))??latest;
-  return <><DetailHeader onBack={onBack}><div className="entity-hero competition-entity-hero"><CompetitionEmblem competition={competition} size={92}/><div className="entity-hero-copy"><div className="kicker"><Flag value={competition.country || competition.region}/> {competition.region} · {competition.country || 'International'} · {competition.kind}</div><h2>{competition.name}</h2><p>{participants.length || latest?.standings?.length || 0} teams · {isCompetitionActive(competition,universe.year)?'active this year':competition.frequency?`next edition follows a ${competition.frequency}-year cycle`:'domestic competition'}</p><div className="entity-chip-row">{latest&&<><span>{latest.year} champion: {latest.champion}</span><span>MVP: {latest.mvp.name}</span></>}</div></div></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="Teams" value={participants.length||latest?.standings?.length||0} detail="Current / latest edition"/><Metric label="Recorded seasons" value={histories.length} detail="Permanent archive"/><Metric label="Latest champion" value={latest?.champion??'—'} detail={latest?String(latest.year):'No completed edition'}/><Metric label="Latest MVP" value={latest?.mvp.name??'—'} detail={latest?.mvp.team??'No award yet'}/></div><DetailTabs tabs={['Overview','Bracket','Seasons','Awards','Rankings','Teams']} tab={tab} setTab={setTab}/>
+  const [tab,setTab]=useState('Overview'); const participants=getCompetitionParticipants(universe,competition.id); const resultLocked=competitionResultLocked(universe,competition.id); const rawHistories=universe.competitionHistory[competition.id]??[]; const histories=resultLocked?rawHistories.filter((season)=>Number(season.year)<Number(universe.year)):rawHistories; const [bracketYear,setBracketYear]=useState(histories[0]?.year??universe.year); const latest=histories[0]; const standings=participants.map((team)=>{const record=team.seasonRecords[competition.id]??team.seasonRecords[team.competitionId]??{wins:0,losses:0};return{team,wins:record.wins,losses:record.losses,pct:record.wins/Math.max(1,record.wins+record.losses)};}).sort((a,b)=>b.pct-a.pct||b.team.rating-a.team.rating); const leaders=currentLeaders(universe,competition); const rankings=competitionRankings(universe,competition.id); const bracketSeason=histories.find((season)=>season.year===Number(bracketYear))??latest;
+  return <><DetailHeader onBack={onBack}><div className="entity-hero competition-entity-hero"><CompetitionEmblem competition={competition} size={92}/><div className="entity-hero-copy"><div className="kicker"><Flag value={competition.country || competition.region}/> {competition.region} · {competition.country || 'International'} · {competition.kind}</div><h2>{competition.name}</h2><p>{participants.length || latest?.standings?.length || 0} teams · {isCompetitionActive(competition,universe.year)?'active this year':competition.frequency?`next edition follows a ${competition.frequency}-year cycle`:'domestic competition'}</p><div className="entity-chip-row">{latest&&<><span>{latest.year} champion: {latest.champion}</span><span>MVP: {latest.mvp.name}</span></>}</div></div></div></DetailHeader><div className="metric-grid detail-metrics"><Metric label="Teams" value={participants.length||latest?.standings?.length||0} detail="Current / latest edition"/><Metric label="Recorded seasons" value={histories.length} detail="Permanent archive"/><Metric label="Latest champion" value={latest?.champion??'—'} detail={latest?String(latest.year):'No completed edition'}/><Metric label="Latest MVP" value={latest?.mvp.name??'—'} detail={latest?.mvp.team??'No award yet'}/></div><DetailTabs tabs={['Overview','Bracket','Seasons','Awards','Rankings','Teams']} tab={tab} setTab={setTab}/>{resultLocked&&<div className="spoiler-lock-banner"><strong>Current edition protected.</strong><span>The selected showcase result, bracket outcome and awards stay hidden until you play or skip the game.</span></div>}
     {tab==='Overview'&&<div className="two-column detail-columns"><section className="panel"><SectionHeader title="Current standings" note="Regular season / seeding"/><div className="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>Win %</th><th>Rating</th></tr></thead><tbody>{standings.slice(0,32).map((entry,index)=><tr className="clickable" key={entry.team.id} onClick={()=>onTeam(entry.team.id)}><td>{index+1}</td><td><span className="table-identity"><TeamMark team={entry.team} size={32}/><strong><Flag value={entry.team.country}/> {entry.team.name}</strong></span></td><td>{entry.wins}</td><td>{entry.losses}</td><td>{pct(entry.pct)}</td><td><strong>{entry.team.rating}</strong></td></tr>)}</tbody></table></div></section><section className="panel"><SectionHeader title="Current leaders" note="Projected until year review"/><div className="leader-cards"><LeaderLine label="MVP race" person={leaders.mvp} onPlayer={onPlayer}/><LeaderLine label="Points" person={leaders.points} suffix={leaders.points ? `${leaders.points.stats.ppg} PPG` : null} onPlayer={onPlayer}/><LeaderLine label="Rebounds" person={leaders.rebounds} suffix={leaders.rebounds ? `${leaders.rebounds.stats.rpg} RPG` : null} onPlayer={onPlayer}/><LeaderLine label="Assists" person={leaders.assists} suffix={leaders.assists ? `${leaders.assists.stats.apg} APG` : null} onPlayer={onPlayer}/></div></section></div>}
     {tab==='Bracket'&&<section className="panel"><SectionHeader title="Tournament bracket" note="See exactly who defeated whom"/>{histories.length?<><div className="filters compact"><Filter label="Edition"><select value={bracketSeason?.year??''} onChange={(e)=>setBracketYear(e.target.value)}>{histories.map((season)=><option key={season.year} value={season.year}>{season.year}</option>)}</select></Filter></div><BracketView rounds={bracketSeason?.bracket??[]} onTeam={onTeam}/></>:<div className="empty-state">The bracket is written at year review.</div>}</section>}
     {tab==='Seasons'&&<section className="panel"><SectionHeader title="Annual competition breakdown" note="Champion, finalist, MVP, playoff MVP and leaders"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>Champion</th><th>Runner-up</th><th>MVP</th><th>Playoff / Finals MVP</th><th>Points</th><th>Rebounds</th><th>Assists</th></tr></thead><tbody>{histories.map((season)=><tr key={season.year}><td><strong>{season.year}</strong></td><td><LinkButton onClick={()=>onTeam(season.championTeamId)}>{season.champion}</LinkButton></td><td><LinkButton onClick={()=>onTeam(season.runnerUpTeamId)}>{season.runnerUp}</LinkButton></td><td><LinkButton onClick={()=>onPlayer(season.mvp.id)}>{season.mvp.name}</LinkButton></td><td><LinkButton onClick={()=>onPlayer(season.finalsMvp.id)}>{season.finalsMvp.name}</LinkButton></td><td><LinkButton onClick={()=>onPlayer(season.leaders.points.id)}>{season.leaders.points.name}</LinkButton> · {season.leaders.points.value}</td><td><LinkButton onClick={()=>onPlayer(season.leaders.rebounds.id)}>{season.leaders.rebounds.name}</LinkButton> · {season.leaders.rebounds.value}</td><td><LinkButton onClick={()=>onPlayer(season.leaders.assists.id)}>{season.leaders.assists.name}</LinkButton> · {season.leaders.assists.value}</td></tr>)}</tbody></table></div></section>}
     {tab==='Awards'&&<section className="panel"><SectionHeader title="Awards by season" note="MVP, statistical leaders and the best five by position"/><div className="table-wrap"><table><thead><tr><th>Year</th><th>MVP</th><th>Finals / playoff MVP</th><th>Points</th><th>Rebounds</th><th>Assists</th><th>Steals</th><th>Blocks</th><th>PG</th><th>SG</th><th>SF</th><th>PF</th><th>C</th></tr></thead><tbody>{histories.map((season)=><tr key={`awards-${season.year}`}><td><strong>{season.year}</strong></td><td>{season.mvp?<LinkButton onClick={()=>onPlayer(season.mvp.id)}>{season.mvp.name}</LinkButton>:'—'}</td><td>{season.finalsMvp?<LinkButton onClick={()=>onPlayer(season.finalsMvp.id)}>{season.finalsMvp.name}</LinkButton>:'—'}</td>{['points','rebounds','assists','steals','blocks'].map((key)=><td key={key}>{season.leaders?.[key]?<><LinkButton onClick={()=>onPlayer(season.leaders[key].id)}>{season.leaders[key].name}</LinkButton><small className="table-subvalue"> {season.leaders[key].value}</small></>:'—'}</td>)}{POSITION_ORDER.map((position)=><td key={position}>{season.allLeagueFive?.[position]?<LinkButton onClick={()=>onPlayer(season.allLeagueFive[position].id)}>{season.allLeagueFive[position].name}</LinkButton>:'—'}</td>)}</tr>)}</tbody></table></div>{!histories.length&&<div className="empty-state">Awards appear after the first completed edition.</div>}</section>}
-    {tab==='Rankings'&&<div className="ranking-grid"><RankingPanel title="Top 10 points" rows={rankings.points} metric="points" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Top 10 rebounds" rows={rankings.rebounds} metric="rebounds" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Top 10 assists" rows={rankings.assists} metric="assists" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Teams with most wins" rows={rankings.teamWins} metric="wins" onClick={(row)=>onTeam(row.teamId)}/><RankingPanel title="Teams with most titles" rows={rankings.teamTitles} metric="titles" onClick={(row)=>onTeam(row.teamId)}/></div>}
+    {tab==='Rankings'&&(resultLocked?<div className="empty-state spoiler-locked">Historical ranking totals are temporarily hidden because they would reveal the protected showcase result.</div>:<div className="ranking-grid"><RankingPanel title="Top 10 points" rows={rankings.points} metric="points" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Top 10 rebounds" rows={rankings.rebounds} metric="rebounds" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Top 10 assists" rows={rankings.assists} metric="assists" onClick={(row)=>onPlayer(row.playerId)}/><RankingPanel title="Teams with most wins" rows={rankings.teamWins} metric="wins" onClick={(row)=>onTeam(row.teamId)}/><RankingPanel title="Teams with most titles" rows={rankings.teamTitles} metric="titles" onClick={(row)=>onTeam(row.teamId)}/></div>)}
     {tab==='Teams'&&<div className="card-grid four team-card-grid-modern">{participants.sort((a,b)=>b.rating-a.rating).map((team)=><button className="team-card modern-team-card" key={team.id} onClick={()=>onTeam(team.id)} style={{'--team-color':team.color}}><div className="team-card-glow"/><div className="team-card-top"><TeamMark team={team} size={56}/><RatingPill value={team.rating}/></div><h3>{team.name}</h3><p><Flag value={team.country}/> {team.country}</p></button>)}</div>}</>;
 }
 
