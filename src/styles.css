@@ -575,3 +575,47 @@ select,input{border-color:#cbd7e5;background:#fff;border-radius:9px}.table-wrap{
   .spoiler-lock-banner{align-items:flex-start;flex-direction:column;gap:2px}
 }
 @media(max-width:480px){.preview-people{grid-template-columns:1fr}.showcase-preview-team{padding:9px}.team-browser-filters input{min-width:0;width:100%}}
+
+/* v1.02: true half court, responsive player placements and platform-independent flags */
+.flag-images{display:inline-flex;align-items:center;gap:3px;vertical-align:-.18em;white-space:nowrap;line-height:1}
+.flag-images img{display:inline-block;width:22px;height:16px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(26,45,68,.20);vertical-align:middle;background:#e7edf5}
+.flag-region{font-family:"Noto Color Emoji","Segoe UI Emoji",sans-serif}
+.starting-five-panel{margin-top:14px}
+.half-court-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.half-court-wrap .basketball-court{position:relative;display:block;width:min(100%,875px);height:auto;aspect-ratio:1000/820;overflow:hidden;isolation:isolate;border:6px solid #e6bf81;border-radius:17px;background:
+linear-gradient(90deg,rgba(255,255,255,.08) 0 49.7%,rgba(152,93,37,.07) 50.3% 100%),
+repeating-linear-gradient(90deg,#deb985 0 28px,#e8c89b 28px 54px,#e0bc89 54px 81px,#eacc9f 81px 106px);
+box-shadow:inset 0 0 0 3px rgba(255,255,255,.30),0 12px 30px rgba(94,61,29,.13)}
+.half-court-wrap .basketball-court:before,.half-court-wrap .basketball-court:after{content:none;display:none}
+.half-court-lines{position:absolute;inset:0;width:100%;height:100%;color:rgba(255,255,255,.96);pointer-events:none;z-index:0}
+.court-orientation{position:absolute;top:1.5%;left:4.5%;font-size:clamp(7px,.8vw,10px);font-weight:900;letter-spacing:.12em;color:rgba(83,58,32,.73);z-index:1}
+.half-court-wrap .court-player{position:absolute;display:flex;align-items:center;gap:8px;width:clamp(118px,21%,190px);padding:7px 8px;border:1px solid rgba(255,255,255,.94);border-radius:13px;background:rgba(255,255,255,.97);color:#20344e;box-shadow:0 7px 20px rgba(67,45,21,.23);z-index:2;text-align:left;transform:translate(-50%,-50%);transition:transform .15s ease,box-shadow .15s ease;min-width:0}
+.half-court-wrap .court-player:hover{transform:translate(-50%,-52%);z-index:5;box-shadow:0 12px 26px rgba(57,38,19,.28)}
+.half-court-wrap .court-player .portrait-frame{flex:0 0 52px!important;width:52px!important;height:52px!important;border-radius:11px}
+.half-court-wrap .court-player-info{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1}
+.half-court-wrap .court-position{font-size:10px;color:#3163a9;font-weight:900;line-height:1.1;white-space:nowrap}
+.half-court-wrap .court-position-name{font-size:9px;color:#7e8da2}
+.half-court-wrap .court-player strong{width:100%;font-size:clamp(10px,1.2vw,13px);color:#20344e;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.half-court-wrap .court-player small{font-size:10px;color:#657b94;font-weight:750}
+.half-court-wrap .court-pos-pg{left:50%;top:79%}
+.half-court-wrap .court-pos-sg{left:17%;top:55%}
+.half-court-wrap .court-pos-sf{left:82%;top:55%}
+.half-court-wrap .court-pos-pf{left:30%;top:27%}
+.half-court-wrap .court-pos-c{left:68%;top:30%}
+.court-legend{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;color:#748397;font-weight:800;font-size:11px}
+@media (max-width:760px){
+.half-court-wrap .basketball-court{display:block;grid-template-columns:none;gap:0;height:auto;aspect-ratio:1000/920;overflow:hidden;border:4px solid #e6bf81;background:repeating-linear-gradient(90deg,#deb985 0 21px,#e8c89b 21px 41px,#e0bc89 41px 62px,#eacc9f 62px 82px)}
+.half-court-lines{height:100%}
+.half-court-wrap .court-player{position:absolute;width:29%;min-width:0;max-width:none;padding:4px;gap:4px;border-radius:9px;flex-direction:column;text-align:center}
+.half-court-wrap .court-player .portrait-frame{flex:0 0 40px!important;width:40px!important;height:40px!important;border-radius:8px}
+.half-court-wrap .court-player-info{width:100%;align-items:center;gap:2px}
+.half-court-wrap .court-position{font-size:9px}.half-court-wrap .court-position-name{display:none}
+.half-court-wrap .court-player strong{font-size:10px;text-align:center}
+.half-court-wrap .court-player small{font-size:9px}
+.half-court-wrap .court-pos-pg{left:50%;top:76%}
+.half-court-wrap .court-pos-sg{left:16%;top:56%}
+.half-court-wrap .court-pos-sf{left:84%;top:56%}
+.half-court-wrap .court-pos-pf{left:26%;top:30%}
+.half-court-wrap .court-pos-c{left:73%;top:30%}
+.court-orientation{font-size:7px;top:3%}.court-legend{gap:9px;font-size:10px}
+}

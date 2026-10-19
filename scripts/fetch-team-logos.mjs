@@ -1,68 +1,83 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { NBA_TEAMS, EURO_TOP_CLUBS, EURO_DOMESTIC, OTHER_PRO_TEAMS, EXTENDED_PRO_TEAMS } from '../src/data/teamData.js';
+import { NBA_TEAMS, EURO_TOP_CLUBS, EURO_DOMESTIC } from '../src/data/teamData.js';
 import { NBA_LOGO_IDS, WIKIPEDIA_PAGE_OVERRIDES } from '../src/data/logoSources.js';
 
-const root=path.resolve('public/assets/logos/official');
+/* Every team has an offline badge. Optional online assets are used only if
+ * verified as logo/crest image files, NEVER Wikipedia article thumbnails.
+ * Failures must not overwrite a previously generated manifest. */
+const root = path.resolve('public/assets/logos/official');
+const manifestPath=path.resolve('src/data/generatedLogoManifest.js');
 await fs.mkdir(root,{recursive:true});
 const manifest={};
 const slug=(s)=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-const headers={'user-agent':'BasketballWorldChronicle/0.9.8 (personal offline game build)'};
-try { const probe=await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=Basketball&format=json',{headers,signal:AbortSignal.timeout(4000)}); if(!probe.ok) throw new Error(`HTTP ${probe.status}`); } catch(error) { console.warn(`[logos] Network unavailable; keeping bundled fallback marks (${error.message}).`); process.exit(0); }
-async function saveUrl(url, teamName, folder, preferredExt=null){
-  try{
-    const response=await fetch(url,{headers,redirect:'follow',signal:AbortSignal.timeout(8000)});
-    if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    const type=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
-    const ext=preferredExt || (type.includes('svg')?'svg':type.includes('png')?'png':type.includes('webp')?'webp':type.includes('jpeg')||type.includes('jpg')?'jpg':'img');
-    const dir=path.join(root,folder); await fs.mkdir(dir,{recursive:true});
-    const file=`${slug(teamName)}.${ext}`; const buf=Buffer.from(await response.arrayBuffer());
-    if(buf.length<400) throw new Error('response too small');
-    await fs.writeFile(path.join(dir,file),buf);
-    manifest[teamName]=`assets/logos/official/${folder}/${file}`;
+const headers={'user-agent':'BasketballWorldChronicle/1.0.2 (noncommercial game logo lookup)'};
+const request=async(url)=>fetch(url,{headers,signal:AbortSignal.timeout(9000)});
+async function saveUrl(url, name, folder, ext){
+  try {
+    const response=await request(url);
+    if(!response.ok) return false;
+    const mime=response.headers.get('content-type')||'';
+    if(ext==='svg' && !mime.includes('svg') && !mime.includes('xml')) return false;
+    if(ext==='png' && !mime.includes('png')) return false;
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length<280 || bytes.length>2000000) return false;
+    const dir=path.join(root,folder);
+    await fs.mkdir(dir,{recursive:true});
+    const relative=`assets/logos/official/${folder}/${slug(name)}.${ext}`;
+    await fs.writeFile(path.resolve('public',relative),bytes);
+    manifest[name]=relative;
     return true;
-  }catch(error){
-    console.warn(`[logos] ${teamName}: ${error.message}`); return false;
+  }catch{return false;}
+}
+async function fetchLogoFromWikipedia(name){
+  const title=WIKIPEDIA_PAGE_OVERRIDES[name] || `${name} basketball`;
+  const listUrl=`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=images&imlimit=300&format=json`;
+  const response=await request(listUrl);
+  if(!response.ok) return false;
+  const pages=Object.values((await response.json())?.query?.pages??{});
+  const images=pages.flatMap((page)=>page.images||[]).map((file)=>file.title).filter(Boolean);
+  const norm=(t)=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ');
+  const teamTokens=norm(name).split(' ').filter((word)=>word.length>=3 && !['basket','basketball','club'].includes(word));
+  const ranked=images.map(title=>{
+    const normalized=norm(title.replace(/^File:/,''));
+    const ext=(title.match(/\.(svg|png)$/i)||[])[1]?.toLowerCase();
+    if(!ext) return {title,score:-10,ext:null};
+    const match=teamTokens.filter((token)=>normalized.includes(token)).length;
+    const logo=/\b(logo|crest|escudo|badge|emblem|wappen|insignia|logotipo)\b/.test(normalized);
+    const excludes=/\b(player|players|team photo|portrait|jersey|arena|stadium|coach|game|season|trophy|supporters|201\d|202\d)\b/.test(normalized);
+    const score=match*4+(logo?8:0)+(ext==='svg'?5:0)-(excludes?20:0);
+    return {title,score,ext};
+  }).filter(r=>r.score>=9).sort((a,b)=>b.score-a.score);
+  for(const row of ranked.slice(0,5)){
+    const info=`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(row.title)}&prop=imageinfo&iiprop=url&format=json`;
+    const r=await request(info);
+    if(!r.ok) continue;
+    const data=await r.json();
+    const url=Object.values(data.query?.pages||{})[0]?.imageinfo?.[0]?.url;
+    if(url && await saveUrl(url,name,'clubs',row.ext)) return true;
   }
+  return false;
 }
-async function wikipediaQuery(url){
-  const response=await fetch(url,{headers,signal:AbortSignal.timeout(8000)});
-  if(!response.ok) throw new Error(`Wikipedia ${response.status}`);
-  const data=await response.json(); const pages=Object.values(data?.query?.pages||{});
-  const page=pages.find(p=>p.thumbnail?.source) || pages[0];
-  return page?.thumbnail?.source || null;
-}
-async function wikipediaThumbFor(teamName){
-  const explicit=WIKIPEDIA_PAGE_OVERRIDES[teamName];
-  if(explicit){
-    const direct=`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(explicit)}&prop=pageimages&pithumbsize=512&format=json&origin=*`;
-    const directImage=await wikipediaQuery(direct);
-    if(directImage) return directImage;
-  }
-  const search=`https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(`"${teamName}" basketball`)}&gsrnamespace=0&gsrlimit=3&prop=pageimages&pithumbsize=512&format=json&origin=*`;
-  return wikipediaQuery(search);
-}
-
-for(const team of NBA_TEAMS){
-  const id=NBA_LOGO_IDS[team.name];
-  if(!id) continue;
-  await saveUrl(`https://cdn.nba.com/logos/nba/${id}/primary/L/logo.svg`,team.name,'nba','svg');
-}
-
-const priority=[...EURO_TOP_CLUBS,...EURO_DOMESTIC,...OTHER_PRO_TEAMS,...EXTENDED_PRO_TEAMS.slice(0,48)];
-const unique=[...new Map(priority.map(t=>[t.name,t])).values()];
-let cursor=0;
+let online=false;
+try{const probe=await request('https://en.wikipedia.org/w/api.php?action=query&titles=Basketball&format=json');online=probe.ok;}
+catch{};
+if(!online){ console.log('[logos] Offline: using 52 bundled European club badges and other team fallbacks.');process.exit(0);}
+const clubs=[...new Map([...EURO_TOP_CLUBS,...EURO_DOMESTIC].map(t=>[t.name,t])).values()];
+let next=0; let count=0;
 async function worker(){
-  while(cursor<unique.length){
-    const i=cursor++; const team=unique[i];
-    try{
-      const url=await wikipediaThumbFor(team.name);
-      if(url) await saveUrl(url,team.name,'clubs');
-      else console.warn(`[logos] ${team.name}: no Wikipedia pageimage`);
-    }catch(error){ console.warn(`[logos] ${team.name}: ${error.message}`); }
+  while(next<clubs.length){
+    const team=clubs[next++];
+    try {if(await fetchLogoFromWikipedia(team.name)) count++;} catch { /* curated badge still present */ }
   }
 }
-await Promise.all(Array.from({length:5},()=>worker()));
-const out=`// Auto-generated by scripts/fetch-team-logos.mjs\nexport const TEAM_LOGO_PATHS = ${JSON.stringify(manifest,null,2)};\n`;
-await fs.writeFile(path.resolve('src/data/generatedLogoManifest.js'),out);
-console.log(`[logos] downloaded ${Object.keys(manifest).length} official/current marks; local fallbacks cover every team.`);
+await Promise.all(Array.from({length:4},()=>worker()));
+const nba=[...NBA_TEAMS];
+await Promise.all(nba.map(async team=>{
+  const id=NBA_LOGO_IDS[team.name];
+  if(id) await saveUrl(`https://cdn.nba.com/logos/nba/${id}/primary/L/logo.svg`,team.name,'nba','svg');
+}));
+if(Object.keys(manifest).length){
+  await fs.writeFile(manifestPath,`// Auto-generated by scripts/fetch-team-logos.mjs\nexport const TEAM_LOGO_PATHS = ${JSON.stringify(manifest,null,2)};\n`);
+}
+console.log(`[logos] ${count} verified club crests fetched; all 52 curated European badges remain available offline.`);

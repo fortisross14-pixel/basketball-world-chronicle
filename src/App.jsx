@@ -53,7 +53,7 @@ const COUNTRY_CODES = {
   Philippines: 'PH', Australia: 'AU', 'New Zealand': 'NZ', Argentina: 'AR', Brazil: 'BR', Nigeria: 'NG',
   Senegal: 'SN', Angola: 'AO', Tunisia: 'TN', Egypt: 'EG', Georgia: 'GE', Latvia: 'LV', Finland: 'FI',
   Sweden: 'SE', Denmark: 'DK', Norway: 'NO', Iceland: 'IS', Portugal: 'PT', Czechia: 'CZ', 'Czech Republic': 'CZ',
-  Hungary: 'HU', Romania: 'RO', Bulgaria: 'BG', Ukraine: 'UA', Mexico: 'MX', 'Puerto Rico': 'PR', Bahamas: 'BS',
+  Hungary: 'HU', Romania: 'RO', Bulgaria: 'BG', Switzerland: 'CH', Austria: 'AT', Ukraine: 'UA', Mexico: 'MX', 'Puerto Rico': 'PR', Bahamas: 'BS',
   Cameroon: 'CM', Mali: 'ML', 'Ivory Coast': 'CI', Lebanon: 'LB', Iran: 'IR', Jordan: 'JO', India: 'IN',
   Panama: 'PA', 'Dominican Republic': 'DO', Venezuela: 'VE', Uruguay: 'UY', Colombia: 'CO', 'Bosnia and Herzegovina': 'BA',
   'South Sudan': 'SS', 'DR Congo': 'CD', 'Cape Verde': 'CV', Uganda: 'UG', Rwanda: 'RW', Kenya: 'KE', Guinea: 'GN', Mozambique: 'MZ',
@@ -68,7 +68,15 @@ function flagText(value) {
   const flags = parts.map((part) => REGION_FLAGS[part] ?? isoFlag(COUNTRY_CODES[part])).filter(Boolean);
   return flags.length ? flags.join(' ') : '🏳️';
 }
-function Flag({ value, title = value }) { return <span className="flag" role="img" aria-label={title || 'flag'} title={title}>{flagText(value)}</span>; }
+function Flag({ value, title = value }) {
+  const parts = String(value || '').split(/\s*\/\s*|\s*·\s*/).filter(Boolean);
+  const codes = parts.map((part) => COUNTRY_CODES[part]).filter(Boolean);
+  const prefix = import.meta.env.BASE_URL || '/';
+  if (!codes.length) return <span className="flag flag-region" role="img" aria-label={title || 'region'} title={title}>{flagText(value)}</span>;
+  return <span className="flag flag-images" role="img" aria-label={title || value} title={title}>
+    {codes.map((code, index) => <img key={`${code}-${index}`} src={`${prefix}assets/flags/${code.toLowerCase()}.png`} alt="" width="24" height="18" loading="lazy" />)}
+  </span>;
+}
 
 function TeamMark({ team, size = 38, className = '' }) { return <TeamBadge team={team} size={size} className={className}/>; }
 function Rarity({ value }) { return <span className={`rarity rarity-${String(value).toLowerCase()}`}>{value}</span>; }
@@ -498,7 +506,35 @@ function YearEndExperience({universe,onTeam,onPlayer,onStartOffseason}) {
   </section>;
 }
 function StartingFiveCourt({team,universe,onPlayer}) {
-  const five=startingFiveFor(team,universe); return <section className="panel starting-five-panel"><SectionHeader title="Starting five" note="Best current player at each basketball position"/><div className="basketball-court"><div className="court-line center-line"/><div className="court-circle"/>{five.map((player,index)=><button key={player.id} className={`court-player court-pos-${player.position.toLowerCase()} rarity-surface-${player.rarity.toLowerCase()}`} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} team={team} size={66}/><span>{player.position}</span><strong>{player.name}</strong><small>{player.current} OVR</small></button>)}</div></section>;
+  const five=startingFiveFor(team,universe);
+  const positionNames={PG:'Point guard',SG:'Shooting guard',SF:'Small forward',PF:'Power forward',C:'Center'};
+  return <section className="panel starting-five-panel">
+    <SectionHeader title="Starting five" note="Best available player at each position · select any portrait to open their career"/>
+    <div className="half-court-wrap">
+      <div className="basketball-court" aria-label="Basketball half-court, hoop at the top, guards outside, forwards and center near the paint">
+        <svg className="half-court-lines" viewBox="0 0 1000 820" preserveAspectRatio="none" aria-hidden="true">
+          <rect x="28" y="26" width="944" height="768" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <path d="M86 26V224C86 455 260 571 500 571S914 455 914 224V26" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <rect x="345" y="26" width="310" height="357" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <path d="M390 383A110 110 0 0 0 610 383" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <path d="M390 383A110 110 0 0 1 610 383" fill="none" stroke="currentColor" strokeDasharray="16 15" strokeWidth="5"/>
+          <path d="M454 114H546" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <circle cx="500" cy="143" r="16" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <path d="M500 26V127" fill="none" stroke="currentColor" strokeWidth="3" opacity=".32" />
+          <path d="M445 794A55 55 0 0 1 555 794" fill="none" stroke="currentColor" strokeWidth="5"/>
+          <path d="M28 794H972" stroke="currentColor" strokeWidth="5" opacity=".3"/>
+        </svg>
+        <div className="court-orientation">ATTACKING HALF · HOOP ↑</div>
+        {five.map((player)=> <button key={player.id} type="button"
+          className={`court-player court-pos-${player.position.toLowerCase()} rarity-surface-${player.rarity.toLowerCase()}`}
+          onClick={()=>onPlayer(player.id)} title={`${positionNames[player.position]} · ${player.name} · ${player.current} OVR`}>
+          <PlayerPortrait player={player} team={team} size={62}/>
+          <span className="court-player-info"><span className="court-position">{player.position}<span className="court-position-name"> · {positionNames[player.position]}</span></span><strong>{player.name}</strong><small>{player.current} OVR</small></span>
+        </button>)}
+      </div>
+      <div className="court-legend"><span>1 · PG</span><span>2 · SG</span><span>3 · SF</span><span>4 · PF</span><span>5 · C</span></div>
+    </div>
+  </section>;
 }
 function OffseasonStageSpotlight({universe,onPlayer,onTeam,onCoach}) {
   if(!universe.offseason?.active)return null; const idx=universe.offseason.stageIndex; const year=universe.offseason.year; const players=allUniversePlayers(universe); const playerById=new Map(players.map((p)=>[p.id,p]));

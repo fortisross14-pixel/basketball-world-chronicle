@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TEAM_LOGO_PATHS } from '../data/generatedLogoManifest.js';
+import { CURATED_CLUB_BADGES } from '../data/curatedClubBadges.js';
 import { nbaRemoteLogo } from '../data/logoSources.js';
 import { HISTORICAL_PORTRAITS, PORTRAIT_POOL_SIZE } from '../data/historicalPortraitMap.js';
 
@@ -51,10 +52,11 @@ export function TeamBadge({team,size=44,className=''}){
   const name=team?.name||'Team';
   const localOfficial=TEAM_LOGO_PATHS[name] ? localAsset(TEAM_LOGO_PATHS[name]) : null;
   const nbaRemote=nbaRemoteLogo(name);
+  const curatedBadge=CURATED_CLUB_BADGES[name] ? localAsset(CURATED_CLUB_BADGES[name]) : null;
   const fallbackFile=localAsset(`assets/logos/fallback/${slug(name)}.svg`);
-  const candidates=useMemo(()=>[localOfficial,nbaRemote,fallbackFile].filter(Boolean),[localOfficial,nbaRemote,fallbackFile]);
+  const candidates=useMemo(()=>[localOfficial,nbaRemote,curatedBadge,fallbackFile].filter(Boolean),[localOfficial,nbaRemote,curatedBadge,fallbackFile]);
   const [attempt,setAttempt]=useState(0);
-  useEffect(()=>setAttempt(0),[name,localOfficial]);
+  useEffect(()=>setAttempt(0),[name,localOfficial,curatedBadge]);
   const src=candidates[attempt]||null;
   return <span className={`visual-badge image-badge ${className}`} style={{width:size,height:size}} title={name}>
     <span className="badge-fallback"><FallbackMark team={team} size={size}/></span>
