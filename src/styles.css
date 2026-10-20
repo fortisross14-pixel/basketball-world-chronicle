@@ -619,3 +619,50 @@ box-shadow:inset 0 0 0 3px rgba(255,255,255,.30),0 12px 30px rgba(94,61,29,.13)}
 .half-court-wrap .court-pos-c{left:73%;top:30%}
 .court-orientation{font-size:7px;top:3%}.court-legend{gap:9px;font-size:10px}
 }
+
+/* v1.03 · Career arcs and Remarkable Careers */
+.filters.six.player-filters{grid-template-columns:repeat(7,minmax(110px,1fr))}
+@media (max-width:1120px){.filters.six.player-filters{grid-template-columns:repeat(4,minmax(120px,1fr))}}
+@media (max-width:560px){.filters.six.player-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.arc-badge-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.arc-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;background:#17375f;color:#fff;font-size:.66rem;font-weight:800;letter-spacing:.01em;white-space:nowrap}
+.arc-badge-row.small .arc-badge{background:#e9eff7;color:#17375f;font-size:.6rem;padding:3px 7px}
+.arc-story-panel{margin-bottom:14px}
+.arc-story-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px}
+.arc-story-list article{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #dce5ef;border-radius:12px;background:#f7faff}
+.arc-story-list p{margin:2px 0 0;color:#53667e;font-size:.8rem;line-height:1.4}
+.arc-story-icon{font-size:1.4rem;line-height:1}
+.career-path-strip{display:flex;gap:4px;margin:0;padding:0;list-style:none;overflow-x:auto;scrollbar-width:thin}
+.career-path-strip li{flex:0 0 auto;min-width:118px;max-width:170px;padding:7px 9px;border-radius:10px;background:#fff;border:1px solid #dce5ef;border-top:4px solid var(--stint-color);display:flex;flex-direction:column;gap:2px}
+.career-path-strip li strong{font-size:.76rem;color:#173451;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.career-path-strip li small{font-size:.66rem}
+.career-path-strip .path-league{font-size:.56rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#53667e}
+.career-path-strip .path-nba .path-league{color:#c8102e}
+.career-path-strip .path-europe .path-league{color:#2f6dcc}
+.career-path-strip .path-ncaa .path-league{color:#7a4fb5}
+.career-path-strip .path-gleague .path-league{color:#d9822b}
+.career-path-strip .path-gap{min-width:auto;justify-content:center;border:0;background:transparent;color:#53667e;font-weight:900}
+.career-path-strip.compact li{min-width:84px;max-width:120px;padding:5px 7px}
+.career-path-strip.compact li strong{font-size:.66rem}
+.arc-tile-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.arc-tile{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 12px;border:1px solid #d9e2ed;border-radius:14px;background:#fff;color:#173451;cursor:pointer;text-align:left;transition:transform .12s ease,box-shadow .12s ease}
+.arc-tile:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgb(22 45 75 / .09)}
+.arc-tile.active{background:#17375f;border-color:#17375f;color:#fff}
+.arc-tile.active .arc-tile-count{color:#cfe0f7}
+.arc-tile.empty{opacity:.55}
+.arc-tile-icon{font-size:1.35rem;line-height:1}
+.arc-tile strong{font-size:.78rem;line-height:1.2}
+.arc-tile-count{font-size:.7rem;font-weight:800;color:#53667e}
+.arc-career-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.arc-career-card{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px;border:1px solid #dce5ef;border-radius:14px;cursor:pointer;text-align:left;color:#173451}
+.arc-career-card:hover{box-shadow:0 6px 18px rgb(22 45 75 / .1)}
+.arc-career-head{display:flex;gap:10px;align-items:center;min-width:0}
+.arc-career-head>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.arc-career-head span{color:#53667e;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arc-career-detail{margin:0;font-size:.82rem;font-weight:700;color:#17375f}
+.arc-more{display:flex;justify-content:center;margin-top:12px}
+.arc-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.arc-board-grid h3{margin-bottom:6px}
+.arc-board-value{font-style:normal;font-weight:900;color:#17375f;font-size:.78rem;white-space:nowrap}
+@media (max-width:1120px){.arc-tile-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.arc-career-grid,.arc-board-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.arc-tile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.arc-career-grid,.arc-board-grid{grid-template-columns:1fr}}

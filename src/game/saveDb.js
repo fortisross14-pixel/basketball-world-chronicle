@@ -2,6 +2,19 @@ const DB_NAME = 'basketball-world-chronicle';
 const DB_VERSION = 2;
 const SAVE_STORE = 'save-slots';
 const META_STORE = 'save-metadata';
+// v1.04: saves are stored as gzip-compressed JSON (about 9x smaller than the raw
+// structured clone). Older saves stored the universe object directly and still load.
+const COMPRESSED_FORMAT = 'gzip-json-v1';
+
+async function compressUniverse(universe) {
+  if (typeof CompressionStream === 'undefined' || typeof Blob === 'undefined' || typeof Response === 'undefined') return null;
+  const stream = new Blob([JSON.stringify(universe)]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Response(stream).blob();
+}
+async function decompressUniverse(blob) {
+  const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(stream).text());
+}
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -49,7 +62,12 @@ export async function loadSaveSlot(slot) {
       requestResult(transaction.objectStore(SAVE_STORE).get(slot), 'Unable to load the selected save.'),
       requestResult(transaction.objectStore(META_STORE).get(slot), 'Unable to load save metadata.'),
     ]);
-    return save ? { ...metadata, ...save } : null;
+    if (!save) return null;
+    if (save.format === COMPRESSED_FORMAT) {
+      const { data, ...rest } = save;
+      return { ...metadata, ...rest, universe: await decompressUniverse(data) };
+    }
+    return { ...metadata, ...save };
   } finally {
     database.close();
   }
@@ -66,11 +84,15 @@ export async function writeSaveSlot(slot, name, universe) {
     version: universe.version ?? 7,
     updatedAt: Date.now(),
   };
+  // Compress before the transaction opens: IndexedDB transactions auto-commit
+  // as soon as the event loop is awaited.
+  const packed = await compressUniverse(universe).catch(() => null);
+  const record = packed ? { slot, format: COMPRESSED_FORMAT, data: packed } : { slot, universe };
   const database = await openDatabase();
   try {
     await new Promise((resolve, reject) => {
       const transaction = database.transaction([SAVE_STORE, META_STORE], 'readwrite');
-      transaction.objectStore(SAVE_STORE).put({ slot, universe });
+      transaction.objectStore(SAVE_STORE).put(record);
       transaction.objectStore(META_STORE).put(metadata);
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error('Save transaction failed.'));

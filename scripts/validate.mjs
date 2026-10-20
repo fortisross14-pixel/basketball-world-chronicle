@@ -12,6 +12,8 @@ import {
 } from '../src/game/universe.js';
 import { DETAILED_COUNTRY_SPECS, SUMMARY_COUNTRY_SPECS, NATIONAL_TEAM_COUNTRIES } from '../src/data/worldData.js';
 import { G_LEAGUE_TEAMS } from '../src/data/teamData.js';
+import { FIRST_NAMES, LAST_NAMES } from '../src/data/namePools.js';
+import { ARC_DEFINITIONS, careerRecordBoards, tagUniverseCareers } from '../src/game/careerArcs.js';
 
 const FULL_SEEDS = [20260729, 19860517];
 const QUICK = process.env.BWC_QUICK === '1';
@@ -233,6 +235,15 @@ for (const seed of SEEDS) {
   const matureGenerationalOutside = universe.players.filter((player)=>player.rarity==='Generational'&&player.age>=21&&!['NBA','NCAA','National'].includes(player.teamType));
   assert(matureGenerationalOutside.length === 0, `Seed ${seed}: a mature Generational player remained outside the NBA.`);
   assert(!universe.players.some((player) => player.current >= 89 && !['NBA','NCAA','National'].includes(player.teamType)), `Seed ${seed}: a 89+ player remained sustainably outside the NBA.`);
+  // v1.04 career movement and storylines.
+  const deadlineDeals = universe.transactions.filter((item) => item.type === 'NBA trade' && /^Trade deadline\./.test(item.detail ?? '')).length / 2;
+  assert(deadlineDeals >= SEASONS * 2, `Seed ${seed}: only ${deadlineDeals} trade-deadline deals in ${SEASONS} seasons.`);
+  assert([...universe.players, ...universe.retiredPlayers].some((player) => player.history.some((season) => season.stints?.length)), `Seed ${seed}: no deadline stint was recorded in player history.`);
+  assert((universe.storylines?.length ?? 0) >= SEASONS * 10 && universe.storylines.some((story) => story.type === 'DEADLINE'), `Seed ${seed}: storylines engine produced too little news.`);
+  assert(!universe.retiredPlayers.some((player) => !player.history?.length && !player.draft && (player.careerEvents?.length ?? 0) <= 1), `Seed ${seed}: an empty prospect was archived as a retired career.`);
+  const arcTagsSeed = tagUniverseCareers(universe);
+  const quiet = ['crossover', 'journeyman', 'homecoming'].filter((id) => !(arcTagsSeed.byArc.get(id)?.length));
+  if (quiet.length) console.log(`  note · seed ${seed}: no ${quiet.join(', ')} careers yet after ${SEASONS} seasons`);
   summaries.push({ seed, finalYear: universe.year, openingHierarchy, finalHierarchy, nba: competitionDiversity(universe,'nba'), euroleague: competitionDiversity(universe,'euroleague'), draft: { ...universe.draftHistory[0], picks: undefined } });
   universe = null;
   if (global.gc) global.gc();
@@ -252,6 +263,18 @@ let showcaseGuard=0;
 while(showcaseUniverse.showcase?.active && showcaseGuard<100){ showcaseUniverse=skipCurrentShowcaseGame(showcaseUniverse); showcaseUniverse=advanceShowcaseGame(showcaseUniverse); showcaseGuard+=1; }
 assert(showcaseUniverse.yearReview && showcaseUniverse.showcaseHistory?.[0]?.games?.length>=8, 'Showcase flow did not return to Year Review.');
 console.log(`  passed · ${showcaseGuard} showcase games archived`);
+
+console.log('\nValidating name pools and career arcs...');
+const generatedNationalities = new Set([...showcaseUniverse.players, ...showcaseUniverse.retiredPlayers].map((player) => player.nationality));
+const missingPools = [...new Set([...NATIONAL_TEAM_COUNTRIES, ...generatedNationalities])].filter((country) => !FIRST_NAMES[country]?.length || !LAST_NAMES[country]?.length);
+assert(!missingPools.length, `Name pools missing for: ${missingPools.join(', ')}.`);
+const generatedNames = showcaseUniverse.players.filter((player) => !player.realIdentity).map((player) => player.name);
+const duplicateNames = generatedNames.length - new Set(generatedNames).size;
+assert(duplicateNames <= Math.ceil(generatedNames.length * 0.002), `${duplicateNames} duplicate generated player names among ${generatedNames.length}.`);
+const arcTags = tagUniverseCareers(showcaseUniverse);
+assert(arcTags.byArc.size === ARC_DEFINITIONS.length, 'Career arc index is incomplete.');
+assert(careerRecordBoards(showcaseUniverse, arcTags.teams).every((board) => Array.isArray(board.rows)), 'Career record boards failed.');
+console.log(`  passed · ${generatedNationalities.size} nationalities covered · ${duplicateNames} duplicate names · ${arcTags.byPlayer.size} tagged careers`);
 
 console.log(`\n${QUICK ? 'Quick' : 'Full deterministic'} validation passed: ${SEEDS.length} seeds × ${SEASONS} seasons.`);
 for (const summary of summaries) console.log(`Seed ${summary.seed} → ${summary.finalYear}: NBA ${summary.finalHierarchy.nbaAverage}, EuroLeague ${summary.finalHierarchy.euroAverage}, NCAA ${summary.finalHierarchy.ncaaAverage}; NBA champions ${summary.nba.champions}, MVPs ${summary.nba.mvps}; EuroLeague champions ${summary.euroleague.champions}, MVPs ${summary.euroleague.mvps}; latest draft ${summary.draft.ncaaPicks}/${summary.draft.internationalPicks}, ${summary.draft.signed} immediate NBA signings.`);
