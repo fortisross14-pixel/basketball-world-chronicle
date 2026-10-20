@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "name": "Season Atlas",
+  "mode": "operate",
+  "palette": {
+    "navy": "#0c1e31",
+    "paper": "#f7f3e8",
+    "ink": "#142232",
+    "gold": "#c89c46",
+    "oxblood": "#8f272c"
+  },
+  "fonts": {
+    "display": "DM Serif Display",
+    "ui": "Manrope"
+  },
+  "signature": "A present-to-history time grammar that connects simulation, career routes, records, and dynasties."
+}

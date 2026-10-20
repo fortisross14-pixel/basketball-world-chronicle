@@ -24,23 +24,23 @@ import { isCompetitionActive } from './data/competitionData.js';
 import { DETAILED_COUNTRY_SPECS, SUMMARY_COUNTRY_SPECS } from './data/worldData.js';
 import { TeamBadge, PlayerPortrait, CoachPortrait, CompetitionEmblem, RatingPill } from './components/VisualIdentity.jsx';
 
-const NAV = ['World','Live Game','Events','People','Market','Chronicle'];
+const NAV = ['Atlas','Tonight','Stories','Records','People','Market'];
 const NAV_GROUPS = {
-  World: ['World','Teams','Tournaments'],
-  'Live Game': ['Live Game'],
-  Events: ['Tournaments','Results'],
+  Atlas: ['World','Tournaments','Teams'],
+  Tonight: ['Live Game'],
+  Stories: ['The Global Five','Careers','Results'],
+  Records: ['Almanac','Statistics'],
   People: ['Players','Coaches','Statistics'],
   Market: ['Market'],
-  Chronicle: ['The Global Five','Careers','Almanac','Results'],
 };
-const NAV_DEFAULTS = {World:'World','Live Game':'Live Game',Events:'Tournaments',People:'Players',Market:'Market',Chronicle:'The Global Five'};
+const NAV_DEFAULTS = {Atlas:'World',Tonight:'Live Game',Stories:'The Global Five',Records:'Almanac',People:'Players',Market:'Market'};
 function activeNavigationGroup(view) {
-  if (view === 'Live Game') return 'Live Game';
+  if (view === 'Live Game') return 'Tonight';
   if (view === 'Market') return 'Market';
-  if (['Players','Coaches','Statistics'].includes(view)) return 'People';
-  if (view === 'Results') return 'Events';
-  if (['The Global Five','Careers','Almanac'].includes(view)) return 'Chronicle';
-  return 'World';
+  if (['Players','Coaches'].includes(view)) return 'People';
+  if (view === 'Statistics' || view === 'Almanac') return 'Records';
+  if (['Results','The Global Five','Careers'].includes(view)) return 'Stories';
+  return 'Atlas';
 }
 const RARITY_ORDER = ['Generational','Legend','Epic','Rare','Uncommon','Common'];
 const unique = (items) => [...new Set(items)].filter((item) => item !== null && item !== undefined && item !== '').sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
@@ -455,7 +455,7 @@ export default function App() {
       <div className="toolbar-note">Slot {activeSlot} · {clubTeams.length} pro teams × 10 · {ncaaTeams.length} NCAA starting fives</div>
     </section>
     <nav className="main-nav" aria-label="Main sections">{NAV.map((item) => <button key={item} className={activeNavigationGroup(view) === item ? 'active' : ''} onClick={() => navigate(NAV_DEFAULTS[item])}>{item}</button>)}</nav>
-    <nav className="chronicle-subnav" aria-label="Section pages">{NAV_GROUPS[activeNavigationGroup(view)].map((item)=><button key={item} className={view===item?'active':''} onClick={()=>navigate(item)}>{item==='The Global Five'?'Magazine':item}</button>)}</nav>
+    <nav className="chronicle-subnav" aria-label="Section pages">{NAV_GROUPS[activeNavigationGroup(view)].map((item)=><button key={item} className={view===item?'active':''} onClick={()=>navigate(item)}>{item==='The Global Five'?'Story desk':item}</button>)}</nav>
     <main>
       {universe.yearReview && !universe.offseason?.active && <YearEndExperience universe={universe} onTeam={openTeam} onPlayer={openPlayer} onStartOffseason={beginOffseason}/>}
       {universe.offseason?.active && <div className="year-review-banner offseason"><strong>Offseason stage {universe.offseason.stageIndex + 1}/{OFFSEASON_STAGES.length}.</strong> {OFFSEASON_STAGES[universe.offseason.stageIndex]}. You can inspect Market after every stage before continuing.</div>}
@@ -1044,6 +1044,13 @@ function WorldView({ universe, setView, setMarketTab, onTeam, onPlayer }) {
     const participants = getCompetitionParticipants(universe, competition.id);
     return { competition, teams: participants.length, rating: participants.length ? avg(participants) : 0 };
   }).filter((row) => row.teams >= 4).sort((a,b) => b.rating-a.rating).slice(0,12);
+  const stories = buildChronicleStories(universe, universe.year).slice(0, 3);
+  const recordLeaders = {
+    ppg: careerStatLeaders(universe, 'ppg').slice(0, 3),
+    rpg: careerStatLeaders(universe, 'rpg').slice(0, 3),
+    apg: careerStatLeaders(universe, 'apg').slice(0, 3),
+  };
+  const dynastyPreview = [...dynastyRows(universe, 'nba'), ...dynastyRows(universe, 'euroleague')].sort((a,b)=>b.streak-a.streak || b.totalTitles-a.totalTitles).slice(0, 4);
   return <>
     <section className="world-hero modern-hero"><div className="world-hero-copy"><div className="kicker light">The Global Five · {universe.year}</div><h2>The living basketball world</h2><p>Follow careers from college and club systems to the NBA, EuroLeague and international basketball. Every title, draft, transfer and great season becomes part of the permanent archive.</p><div className="story-actions"><button className="button primary" onClick={() => setView('Tournaments')}>Explore competitions</button><button className="button ghost-light" onClick={() => goToRoute('market/free-agency')}>Open market</button></div></div><div className="world-hero-stars">{leaders.slice(0,3).map((player,index)=><button key={player.id} className={`hero-player-card hero-rank-${index+1}`} onClick={()=>onPlayer(player)}><PlayerPortrait player={player} size={84}/><div><Rarity value={player.rarity}/><strong>{player.name}</strong><span>{player.teamName} · {player.current} OVR</span></div></button>)}</div></section>
     <section className="world-command-grid" aria-label="World briefing">
@@ -1055,6 +1062,18 @@ function WorldView({ universe, setView, setMarketTab, onTeam, onPlayer }) {
       <button className="world-command-card" onClick={()=>onPlayer(leaders[0])}><span className="kicker">BEST ACTIVE PLAYER</span><strong>{leaders[0]?.name??'—'}</strong><small>{leaders[0]?.current??'—'} OVR · {leaders[0]?.rarity??''}</small><b>View career →</b></button>
       <button className="world-command-card" onClick={()=>goToRoute('market/summary')}><span className="kicker">SUMMER MOVEMENT</span><strong>{universe.offseasonHistory?.length?'Winners & losers':'Transfer market'}</strong><small>{universe.freeAgents?.length??0} available free agents</small><b>Open market →</b></button>
     </section>
+    <section className="atlas-history-band section-gap" aria-label="Season Atlas history">
+      <div className="atlas-history-head"><div><h2>Season Atlas</h2><p>Advance the world, then trace the moments that become its history.</p></div><button className="atlas-link" onClick={()=>goToRoute('almanac')}>Open all records →</button></div>
+      <div className="atlas-history-grid">
+        <article className="atlas-route-card"><span>Career route</span><h3>One world. Connected paths.</h3><p>From college breakout to EuroLeague stardom to an NBA peak, every player leaves a route worth revisiting.</p><button onClick={()=>setView('Careers')}>Explore remarkable careers →</button></article>
+        <article className="atlas-route-visual"><img src={`${import.meta.env.BASE_URL || '/'}assets/plates/career-route.png`} alt="Illustrated basketball career route across the global game"/><div><span>Follow the route</span><strong>College → Europe → NBA</strong></div></article>
+      </div>
+    </section>
+    <section className="atlas-archive-grid section-gap">
+      <section className="atlas-panel"><div className="atlas-panel-head"><div><h2>Records in reach</h2><p>Career leaders across every recorded season.</p></div><button onClick={()=>goToRoute('statistics')}>Full record boards →</button></div><div className="record-columns">{Object.entries(recordLeaders).map(([key,rows])=><div key={key}><strong>{key.toUpperCase()}</strong>{rows.map((row,index)=><button key={row.playerId} onClick={()=>onPlayer(row.playerId)}><span>{index+1}</span><b>{row.player}</b><em>{formatNumber(row.value)}</em></button>)}</div>)}</div></section>
+      <section className="atlas-panel dynasty-panel"><div className="atlas-panel-head"><div><h2>Dynasties in motion</h2><p>Great teams change the map over years, not games.</p></div><button onClick={()=>goToRoute('almanac')}>Dynasty archive →</button></div><div className="dynasty-trails">{dynastyPreview.map((row)=><div key={`${row.teamId}-${row.start}`}><strong>{row.team}</strong><span>{row.start}–{row.end}</span><i style={{'--trail':Math.min(100, row.streak * 20)}}><b/></i><em>{row.streak} straight · {row.totalTitles} titles</em></div>)}{!dynastyPreview.length&&<p className="atlas-empty">Complete seasons to establish the first dynasty trail.</p>}</div></section>
+    </section>
+    <section className="atlas-story-desk section-gap"><div className="atlas-panel-head"><div><h2>New chapters in this universe</h2><p>The stories that gained weight since the last simulation.</p></div><button onClick={()=>setView('The Global Five')}>Open story desk →</button></div><div className="atlas-story-grid">{stories.map((story)=><StoryCard key={story.key} story={story} onPlayer={onPlayer} onTeam={onTeam}/>)}</div>{!stories.length&&<div className="atlas-empty">Run the season forward to discover the first defining stories.</div>}</section>
     <div className="metric-grid world-metrics"><Metric label="NBA average" value={avg(nba).toFixed(1)} detail="Deepest talent pool" /><Metric label="EuroLeague average" value={avg(euro).toFixed(1)} detail="Top non-NBA clubs" /><Metric label="NCAA average" value={avg(ncaa).toFixed(1)} detail="Prospect level" /><Metric label="Free agents" value={universe.freeAgents.length} detail="Visible market pool" /></div>
     <section className="two-column section-gap"><section className="panel visual-panel"><SectionHeader title="Global team power" note="National teams excluded" /><div className="rank-list">{topTeams.map((team,index) => <button className="rank-row rank-button visual-rank" key={team.id} onClick={() => onTeam(team)}><span className="rank-number">{index+1}</span><TeamMark team={team} size={46}/><div className="grow"><strong><Flag value={team.country}/> {team.name}</strong><span>{team.competition} · raw {team.rawRating}</span></div><RatingPill value={team.rating}/></button>)}</div></section><section className="panel visual-panel"><SectionHeader title="Best players today" note="Open a full career" /><div className="player-mini-grid">{leaders.map((player) => <button className={`mini-player-card rarity-surface-${player.rarity.toLowerCase()}`} key={player.id} onClick={() => onPlayer(player)}><PlayerPortrait player={player} size={66}/><div><Rarity value={player.rarity}/><strong>{player.name}</strong><span><Flag value={player.nationality}/> {player.position} · {player.teamName}</span></div><RatingPill value={player.current}/></button>)}</div></section></section>
     <section className="panel section-gap"><SectionHeader title="League strength" note="Current roster, coaching and institutional context"/><div className="table-wrap"><table><thead><tr><th>#</th><th>Competition</th><th>Region</th><th>Teams</th><th>Average rating</th></tr></thead><tbody>{leagueStrengths.map((row,index)=><tr key={row.competition.id}><td>{index+1}</td><td><span className="table-identity"><CompetitionEmblem competition={row.competition} size={32}/><strong>{row.competition.name}</strong></span></td><td><Flag value={row.competition.region}/> {row.competition.region}</td><td>{row.teams}</td><td><strong>{row.rating.toFixed(1)}</strong></td></tr>)}</tbody></table></div></section>

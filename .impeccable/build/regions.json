@@ -1,0 +1,12 @@
+{
+  "regions": [
+    {"id":"atlas-rail","kind":"chrome","grid":"A0:A9","note":"midnight navigation rail"},
+    {"id":"atlas-topline","kind":"chrome","grid":"B0:J0","note":"midnight universe header"},
+    {"id":"atlas-intro","kind":"text","grid":"B1:D4","note":"season thesis and simulation copy"},
+    {"id":"atlas-simulate","kind":"control","grid":"B4:D4","note":"simulate next week action"},
+    {"id":"career-route","kind":"image","grid":"D1:J4","note":"connected college, EuroLeague and NBA career portraits"},
+    {"id":"champions-timeline","kind":"chrome","grid":"B5:J6","note":"chronological winners strip"},
+    {"id":"record-board","kind":"chrome","grid":"B7:D9","note":"career PPG, RPG and APG board"},
+    {"id":"dynasty-board","kind":"chrome","grid":"E7:J9","note":"dynasty evolution grid and historical note"}
+  ]
+}
