@@ -1,30 +1,30 @@
-# Design system: Season Atlas
+# Design system: Broadcast Command Center
 
 <!-- impeccable:design-schema 1 -->
 
 ## Visual world
 
-Season Atlas turns the game shell into a premium global sports annual. Midnight navy is the active game layer; warm atlas paper is the historical reading surface. Oxblood is reserved for consequential simulation actions and championship context, while gold marks navigation, active progression, and achievement.
+Broadcast Command Center treats the simulator as a live global sports game. A midnight command rail carries primary destinations; the active season and simulation action stay operationally visible; content plays inside a deep arena-blue stage built for long sessions. Gold marks active navigation and consequential progress, red marks critical story or championship pressure, and blue/green retain semantic state roles.
 
 ## Type
 
-`DM Serif Display` leads historical headings, chapter titles, records, and dynasty language. `Manrope` carries navigation, controls, tables, and all utility information.
+`Barlow Condensed` carries high-energy game headers, match state, and primary hierarchy. `Manrope` carries navigation, controls, tables, and all utility information. The editorial face is limited to legacy and historical moments.
 
 ## Navigation
 
-The primary route is organized by the player’s intent: Atlas, Tonight, Stories, Records, People, and Market. The sub-navigation then exposes the relevant connected views. On mobile, the six destinations remain directly available in the bottom navigation.
+The persistent command rail organizes the universe by player intent: Atlas, Tonight, Stories, Records, People, and Market. A context sub-navigation exposes the next useful depth without replacing the player’s location. On narrower screens the rail becomes direct bottom navigation.
 
 ## Interaction grammar
 
-The simulation action remains visibly separate from browsing. The present moment is placed before history; records and dynasties are read as long trails. Interactive people, teams, and story cards stay linked to their existing routes.
+Simulation controls form a distinct season bar above the work area. The current moment leads; records and dynasties read as long trails; people, teams, and stories retain their existing deep-link behavior. Every touch target is at least 34px high, with primary game actions at 40px or more.
 
 ## Components
 
-- Atlas band: paired narrative copy and a connected career-route image.
-- Record board: compact PPG, RPG, and APG career-leader columns.
-- Dynasty trail: a chronological visual run with title count and years.
-- Story desk: three current universe chapters with direct deep links.
+- Command rail: fixed game destinations and unmistakable active state.
+- Season bar: advance controls, current phase, and showcase state.
+- Game surfaces: dark raised panels, dense but breathable tables, badge-led identity, and broadcast-grade detail headers.
+- Atlas history layer: career routes, record boards, dynasty trails, and a direct story desk.
 
 ## Responsive behavior
 
-The Atlas panels collapse to a single reading path on narrow screens. Tables and record columns preserve their content through horizontal scrolling rather than truncated data. Mobile keeps direct top-level destinations available.
+Laptop and landscape tablet use the rail-and-stage layout. At narrower widths the rail collapses, high-priority simulation actions persist, panels move to one column, and data keeps its full fidelity through scrollable tables rather than tiny type.

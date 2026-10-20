@@ -1,17 +1,17 @@
 {
   "schema": 1,
-  "name": "Season Atlas",
+  "name": "Broadcast Command Center",
   "mode": "operate",
   "palette": {
-    "navy": "#0c1e31",
-    "paper": "#f7f3e8",
-    "ink": "#142232",
-    "gold": "#c89c46",
-    "oxblood": "#8f272c"
+    "void": "#070d14",
+    "rail": "#0b1520",
+    "stage": "#101b27",
+    "gold": "#f4b544",
+    "hot": "#e85b4e"
   },
   "fonts": {
-    "display": "DM Serif Display",
+    "display": "Barlow Condensed",
     "ui": "Manrope"
   },
-  "signature": "A present-to-history time grammar that connects simulation, career routes, records, and dynasties."
+  "signature": "A persistent game command rail and active season bar framing broadcast-grade management surfaces."
 }
