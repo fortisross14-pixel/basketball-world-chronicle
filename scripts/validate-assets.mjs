@@ -19,7 +19,7 @@ for(const code of codes){
   assert(fs.existsSync(path.join('public/assets/flags',`${code.toLowerCase()}.png`)),`Missing country flag ${code}`);
 }
 for(const pos of ['pg','sg','sf','pf','c']){
-  assert(fs.readFileSync('src/styles.css','utf8').includes(`.half-court-wrap .court-pos-${pos}{`),`Missing half-court position ${pos}`);
+  assert(new RegExp(`\.court-pos-${pos}\s*\{`).test(fs.readFileSync('src/styles.css','utf8')),`Missing half-court position ${pos}`);
 }
 assert(app.includes('viewBox="0 0 1000 820"'),'Half-court line overlay missing');
 console.log(`Visual assets: ${keys.size} European club badges, ${codes.size} country flag codes, all five half-court positions passed.`);

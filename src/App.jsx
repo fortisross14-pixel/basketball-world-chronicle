@@ -475,9 +475,9 @@ export default function App() {
       <p className="sim-hint">{simHint}</p>
       <div className="sim-controls">
         {!universe.showcase?.active && !universe.yearReview && !universe.offseason?.active && <>
-          <button className="button primary" disabled={!presentationReady} onClick={() => runWeeks(1)}><Icon name="play" size={14}/>Sim 1 week</button>
-          <button className="button" disabled={!presentationReady} onClick={() => runWeeks(4)}>4 weeks</button>
-          <button className="button" disabled={!presentationReady} onClick={() => runWeeks(50)}><Icon name="skip" size={15}/>To postseason</button>
+          <button className="button primary" disabled={!presentationReady} onClick={() => runWeeks(1)}><Icon name="play" size={14}/><span className="lbl-long">Sim 1 week</span><span className="lbl-short">1 wk</span></button>
+          <button className="button" disabled={!presentationReady} onClick={() => runWeeks(4)}><span className="lbl-long">4 weeks</span><span className="lbl-short">4 wk</span></button>
+          <button className="button" disabled={!presentationReady} onClick={() => runWeeks(50)}><Icon name="skip" size={15}/><span className="lbl-long">To postseason</span><span className="lbl-short">Playoffs</span></button>
           <button className={`button icon-button ${showPresentationSettings ? 'active' : ''}`} onClick={() => setShowPresentationSettings((value)=>!value)} title={presentationReady ? 'Change which games you watch live' : 'Choose which games to watch live'} aria-label="Live game settings"><Icon name="settings" size={17}/></button>
         </>}
         {universe.showcase?.active && showcaseGame && <button className="next-game-chip" onClick={() => navigate('Live Game')}>
