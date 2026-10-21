@@ -90,7 +90,7 @@ function portraitPath(entity,coach=false){
 function Portrait({entity,team,size=72,className='',coach=false}){
   const src=portraitPath(entity,coach); const rarity=String(entity?.rarity||'Common').toLowerCase();
   const frameColor=rarityColor[entity?.rarity]||'#8090a0';
-  return <span className={`portrait-frame raster-portrait rarity-frame-${rarity} ${coach?'coach-raster':''} ${className}`} style={{width:size,height:size,'--portrait-accent':team?.color||frameColor}} title={entity?.name}>
+  return <span className={`portrait-frame raster-portrait rarity-frame-${rarity} ${size>=56?'pf-lg':size<=40?'pf-sm':''} ${coach?'coach-raster':''} ${className}`} style={{width:size,height:size,'--portrait-accent':team?.color||frameColor}} title={entity?.name}>
     <img src={src} alt={entity?.name?`${entity.name} portrait`:'Basketball portrait'} loading="lazy"/>
     <span className="portrait-accent" aria-hidden="true"/>
   </span>;
@@ -124,12 +124,11 @@ export function RatingPill({value,label='OVR',size='md'}){
 }
 // Bar fill: maps 50–99 onto the track so differences between real teams stay visible.
 export function meterPercent(value,floor=50,ceil=99){ return clamp(((Number(value)||floor)-floor)/(ceil-floor)*100,4,100); }
-export function StrengthBars({profile,tones={},compact=false}){
+export function StrengthBars({profile,tones={},compact=false,rows=[['perimeter','Perimeter'],['interior','Interior'],['defense','Defense'],['rebounding','Rebounding']]}){
   if(!profile) return null;
-  const rows=[['perimeter','Perimeter'],['interior','Interior'],['defense','Defense'],['rebounding','Rebounding']];
   return <div className={`strength-bars ${compact?'compact':''}`}>
-    {rows.map(([key,label])=>{const v=profile[key]; if(!Number.isFinite(v)) return null; const tone=tones[key]??`g-${gradeFor(v).grade.toLowerCase()}`; return <div className={`sbar tone-${tone}`} key={key}>
-      <span className="sbar-label">{compact?label.slice(0,3):label}</span>
+    {rows.map(([key,label,short])=>{const v=profile[key]; if(!Number.isFinite(v)) return null; const tone=tones[key]??`g-${gradeFor(v).grade.toLowerCase()}`; return <div className={`sbar tone-${tone}`} key={key}>
+      <span className="sbar-label">{compact?(short??label.slice(0,3)):label}</span>
       <span className="sbar-track"><i style={{width:`${meterPercent(v)}%`}}/></span>
       <span className="sbar-value">{Math.round(v)}</span>
     </div>;})}
@@ -156,6 +155,7 @@ export function teamColorPair(a,b){
   const ha=hueOf(A),hb=hueOf(B);
   const hueGap=ha==null||hb==null?0:Math.min(Math.abs(ha-hb),360-Math.abs(ha-hb));
   const lumGap=Math.abs(luminance(A)-luminance(B));
-  if(hueGap<42&&lumGap<.18){ const blueish=ha!=null&&ha>170&&ha<280; B=blueish?'#f4b544':'#5fb0ff'; }
+  // Never fall back to gold: gold is reserved for the S grade and primary actions.
+  if(hueGap<42&&lumGap<.18){ const blueish=ha!=null&&ha>170&&ha<300; B=blueish?'#ef6b5b':'#5fa8ff'; }
   return [A,B];
 }

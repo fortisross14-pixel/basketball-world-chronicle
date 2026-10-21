@@ -1,17 +1,687 @@
 {
-  "schema": 1,
-  "name": "Broadcast Command Center",
-  "mode": "operate",
-  "palette": {
-    "void": "#070d14",
-    "rail": "#0b1520",
-    "stage": "#101b27",
-    "gold": "#f4b544",
-    "hot": "#e85b4e"
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T01:18:17.277Z",
+  "title": "Design System: Basketball World Chronicle",
+  "extensions": {
+    "colorMeta": {
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "#060b11",
+        "oklch": "oklch(14.7% 0.016 250.6)",
+        "tonalRamp": [
+          "oklch(15% 0.016 250.6)",
+          "oklch(26% 0.016 250.6)",
+          "oklch(37% 0.016 250.6)",
+          "oklch(48% 0.016 250.6)",
+          "oklch(59% 0.016 250.6)",
+          "oklch(70% 0.016 250.6)",
+          "oklch(82% 0.016 250.6)",
+          "oklch(95% 0.016 250.6)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Command Rail",
+        "canonical": "#0a131d",
+        "oklch": "oklch(18.3% 0.025 251.8)",
+        "tonalRamp": [
+          "oklch(15% 0.025 251.8)",
+          "oklch(26% 0.025 251.8)",
+          "oklch(37% 0.025 251.8)",
+          "oklch(48% 0.025 251.8)",
+          "oklch(59% 0.025 251.8)",
+          "oklch(70% 0.025 251.8)",
+          "oklch(82% 0.025 251.8)",
+          "oklch(95% 0.025 251.8)"
+        ]
+      },
+      "stage": {
+        "role": "neutral",
+        "displayName": "Stage",
+        "canonical": "#0d1722",
+        "oklch": "oklch(20.1% 0.027 251.5)",
+        "tonalRamp": [
+          "oklch(15% 0.027 251.5)",
+          "oklch(26% 0.027 251.5)",
+          "oklch(37% 0.027 251.5)",
+          "oklch(48% 0.027 251.5)",
+          "oklch(59% 0.027 251.5)",
+          "oklch(70% 0.027 251.5)",
+          "oklch(82% 0.027 251.5)",
+          "oklch(95% 0.027 251.5)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#121f2c",
+        "oklch": "oklch(23.4% 0.031 249.3)",
+        "tonalRamp": [
+          "oklch(15% 0.031 249.3)",
+          "oklch(26% 0.031 249.3)",
+          "oklch(37% 0.031 249.3)",
+          "oklch(48% 0.031 249.3)",
+          "oklch(59% 0.031 249.3)",
+          "oklch(70% 0.031 249.3)",
+          "oklch(82% 0.031 249.3)",
+          "oklch(95% 0.031 249.3)"
+        ]
+      },
+      "panel-2": {
+        "role": "neutral",
+        "displayName": "Panel Raised",
+        "canonical": "#172838",
+        "oklch": "oklch(27% 0.038 247.9)",
+        "tonalRamp": [
+          "oklch(15% 0.038 247.9)",
+          "oklch(26% 0.038 247.9)",
+          "oklch(37% 0.038 247.9)",
+          "oklch(48% 0.038 247.9)",
+          "oklch(59% 0.038 247.9)",
+          "oklch(70% 0.038 247.9)",
+          "oklch(82% 0.038 247.9)",
+          "oklch(95% 0.038 247.9)"
+        ]
+      },
+      "panel-3": {
+        "role": "neutral",
+        "displayName": "Panel Active",
+        "canonical": "#1d3246",
+        "oklch": "oklch(30.9% 0.045 248.3)",
+        "tonalRamp": [
+          "oklch(15% 0.045 248.3)",
+          "oklch(26% 0.045 248.3)",
+          "oklch(37% 0.045 248.3)",
+          "oklch(48% 0.045 248.3)",
+          "oklch(59% 0.045 248.3)",
+          "oklch(70% 0.045 248.3)",
+          "oklch(82% 0.045 248.3)",
+          "oklch(95% 0.045 248.3)"
+        ]
+      },
+      "sunk": {
+        "role": "neutral",
+        "displayName": "Sunk Well",
+        "canonical": "#0b1520",
+        "oklch": "oklch(19.2% 0.027 251.6)",
+        "tonalRamp": [
+          "oklch(15% 0.027 251.6)",
+          "oklch(26% 0.027 251.6)",
+          "oklch(37% 0.027 251.6)",
+          "oklch(48% 0.027 251.6)",
+          "oklch(59% 0.027 251.6)",
+          "oklch(70% 0.027 251.6)",
+          "oklch(82% 0.027 251.6)",
+          "oklch(95% 0.027 251.6)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#22374a",
+        "oklch": "oklch(32.8% 0.043 246.8)",
+        "tonalRamp": [
+          "oklch(15% 0.043 246.8)",
+          "oklch(26% 0.043 246.8)",
+          "oklch(37% 0.043 246.8)",
+          "oklch(48% 0.043 246.8)",
+          "oklch(59% 0.043 246.8)",
+          "oklch(70% 0.043 246.8)",
+          "oklch(82% 0.043 246.8)",
+          "oklch(95% 0.043 246.8)"
+        ]
+      },
+      "line-2": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "#2f4b63",
+        "oklch": "oklch(40.1% 0.053 245.5)",
+        "tonalRamp": [
+          "oklch(15% 0.053 245.5)",
+          "oklch(26% 0.053 245.5)",
+          "oklch(37% 0.053 245.5)",
+          "oklch(48% 0.053 245.5)",
+          "oklch(59% 0.053 245.5)",
+          "oklch(70% 0.053 245.5)",
+          "oklch(82% 0.053 245.5)",
+          "oklch(95% 0.053 245.5)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "#eef4f9",
+        "oklch": "oklch(96.4% 0.009 242.8)",
+        "tonalRamp": [
+          "oklch(15% 0.009 242.8)",
+          "oklch(26% 0.009 242.8)",
+          "oklch(37% 0.009 242.8)",
+          "oklch(48% 0.009 242.8)",
+          "oklch(59% 0.009 242.8)",
+          "oklch(70% 0.009 242.8)",
+          "oklch(82% 0.009 242.8)",
+          "oklch(95% 0.009 242.8)"
+        ]
+      },
+      "text-2": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "canonical": "#b6c6d4",
+        "oklch": "oklch(81.9% 0.026 244.5)",
+        "tonalRamp": [
+          "oklch(15% 0.026 244.5)",
+          "oklch(26% 0.026 244.5)",
+          "oklch(37% 0.026 244.5)",
+          "oklch(48% 0.026 244.5)",
+          "oklch(59% 0.026 244.5)",
+          "oklch(70% 0.026 244.5)",
+          "oklch(82% 0.026 244.5)",
+          "oklch(95% 0.026 244.5)"
+        ]
+      },
+      "text-3": {
+        "role": "neutral",
+        "displayName": "Text Tertiary",
+        "canonical": "#8aa0b4",
+        "oklch": "oklch(69.6% 0.039 245.8)",
+        "tonalRamp": [
+          "oklch(15% 0.039 245.8)",
+          "oklch(26% 0.039 245.8)",
+          "oklch(37% 0.039 245.8)",
+          "oklch(48% 0.039 245.8)",
+          "oklch(59% 0.039 245.8)",
+          "oklch(70% 0.039 245.8)",
+          "oklch(82% 0.039 245.8)",
+          "oklch(95% 0.039 245.8)"
+        ]
+      },
+      "gold": {
+        "role": "primary",
+        "displayName": "Trophy Gold",
+        "canonical": "#f4b544",
+        "oklch": "oklch(81.2% 0.144 78.4)",
+        "tonalRamp": [
+          "oklch(15% 0.144 78.4)",
+          "oklch(26% 0.144 78.4)",
+          "oklch(37% 0.144 78.4)",
+          "oklch(48% 0.144 78.4)",
+          "oklch(59% 0.144 78.4)",
+          "oklch(70% 0.144 78.4)",
+          "oklch(82% 0.144 78.4)",
+          "oklch(95% 0.144 78.4)"
+        ]
+      },
+      "gold-ink": {
+        "role": "primary",
+        "displayName": "Gold Ink",
+        "canonical": "#1a1203",
+        "oklch": "oklch(18.8% 0.032 83.9)",
+        "tonalRamp": [
+          "oklch(15% 0.032 83.9)",
+          "oklch(26% 0.032 83.9)",
+          "oklch(37% 0.032 83.9)",
+          "oklch(48% 0.032 83.9)",
+          "oklch(59% 0.032 83.9)",
+          "oklch(70% 0.032 83.9)",
+          "oklch(82% 0.032 83.9)",
+          "oklch(95% 0.032 83.9)"
+        ]
+      },
+      "hot": {
+        "role": "secondary",
+        "displayName": "Arena Red",
+        "canonical": "#ef6b5b",
+        "oklch": "oklch(68.6% 0.166 29.1)",
+        "tonalRamp": [
+          "oklch(15% 0.166 29.1)",
+          "oklch(26% 0.166 29.1)",
+          "oklch(37% 0.166 29.1)",
+          "oklch(48% 0.166 29.1)",
+          "oklch(59% 0.166 29.1)",
+          "oklch(70% 0.166 29.1)",
+          "oklch(82% 0.166 29.1)",
+          "oklch(95% 0.166 29.1)"
+        ]
+      },
+      "live": {
+        "role": "secondary",
+        "displayName": "Court Green",
+        "canonical": "#4cc38a",
+        "oklch": "oklch(73.5% 0.136 159.3)",
+        "tonalRamp": [
+          "oklch(15% 0.136 159.3)",
+          "oklch(26% 0.136 159.3)",
+          "oklch(37% 0.136 159.3)",
+          "oklch(48% 0.136 159.3)",
+          "oklch(59% 0.136 159.3)",
+          "oklch(70% 0.136 159.3)",
+          "oklch(82% 0.136 159.3)",
+          "oklch(95% 0.136 159.3)"
+        ]
+      },
+      "blue": {
+        "role": "secondary",
+        "displayName": "Broadcast Blue",
+        "canonical": "#5fa8ff",
+        "oklch": "oklch(72.2% 0.147 254)",
+        "tonalRamp": [
+          "oklch(15% 0.147 254)",
+          "oklch(26% 0.147 254)",
+          "oklch(37% 0.147 254)",
+          "oklch(48% 0.147 254)",
+          "oklch(59% 0.147 254)",
+          "oklch(70% 0.147 254)",
+          "oklch(82% 0.147 254)",
+          "oklch(95% 0.147 254)"
+        ]
+      },
+      "grade-s": {
+        "role": "tertiary",
+        "displayName": "Grade S",
+        "canonical": "#f4b544",
+        "oklch": "oklch(81.2% 0.144 78.4)",
+        "tonalRamp": [
+          "oklch(15% 0.144 78.4)",
+          "oklch(26% 0.144 78.4)",
+          "oklch(37% 0.144 78.4)",
+          "oklch(48% 0.144 78.4)",
+          "oklch(59% 0.144 78.4)",
+          "oklch(70% 0.144 78.4)",
+          "oklch(82% 0.144 78.4)",
+          "oklch(95% 0.144 78.4)"
+        ]
+      },
+      "grade-a": {
+        "role": "tertiary",
+        "displayName": "Grade A",
+        "canonical": "#4cc38a",
+        "oklch": "oklch(73.5% 0.136 159.3)",
+        "tonalRamp": [
+          "oklch(15% 0.136 159.3)",
+          "oklch(26% 0.136 159.3)",
+          "oklch(37% 0.136 159.3)",
+          "oklch(48% 0.136 159.3)",
+          "oklch(59% 0.136 159.3)",
+          "oklch(70% 0.136 159.3)",
+          "oklch(82% 0.136 159.3)",
+          "oklch(95% 0.136 159.3)"
+        ]
+      },
+      "grade-b": {
+        "role": "tertiary",
+        "displayName": "Grade B",
+        "canonical": "#5fa8ff",
+        "oklch": "oklch(72.2% 0.147 254)",
+        "tonalRamp": [
+          "oklch(15% 0.147 254)",
+          "oklch(26% 0.147 254)",
+          "oklch(37% 0.147 254)",
+          "oklch(48% 0.147 254)",
+          "oklch(59% 0.147 254)",
+          "oklch(70% 0.147 254)",
+          "oklch(82% 0.147 254)",
+          "oklch(95% 0.147 254)"
+        ]
+      },
+      "grade-c": {
+        "role": "tertiary",
+        "displayName": "Grade C",
+        "canonical": "#a9b6c4",
+        "oklch": "oklch(77.1% 0.025 250.1)",
+        "tonalRamp": [
+          "oklch(15% 0.025 250.1)",
+          "oklch(26% 0.025 250.1)",
+          "oklch(37% 0.025 250.1)",
+          "oklch(48% 0.025 250.1)",
+          "oklch(59% 0.025 250.1)",
+          "oklch(70% 0.025 250.1)",
+          "oklch(82% 0.025 250.1)",
+          "oklch(95% 0.025 250.1)"
+        ]
+      },
+      "grade-d": {
+        "role": "tertiary",
+        "displayName": "Grade D",
+        "canonical": "#f2924f",
+        "oklch": "oklch(74.8% 0.142 53.5)",
+        "tonalRamp": [
+          "oklch(15% 0.142 53.5)",
+          "oklch(26% 0.142 53.5)",
+          "oklch(37% 0.142 53.5)",
+          "oklch(48% 0.142 53.5)",
+          "oklch(59% 0.142 53.5)",
+          "oklch(70% 0.142 53.5)",
+          "oklch(82% 0.142 53.5)",
+          "oklch(95% 0.142 53.5)"
+        ]
+      },
+      "grade-e": {
+        "role": "tertiary",
+        "displayName": "Grade E",
+        "canonical": "#ef6b5b",
+        "oklch": "oklch(68.6% 0.166 29.1)",
+        "tonalRamp": [
+          "oklch(15% 0.166 29.1)",
+          "oklch(26% 0.166 29.1)",
+          "oklch(37% 0.166 29.1)",
+          "oklch(48% 0.166 29.1)",
+          "oklch(59% 0.166 29.1)",
+          "oklch(70% 0.166 29.1)",
+          "oklch(82% 0.166 29.1)",
+          "oklch(95% 0.166 29.1)"
+        ]
+      },
+      "rarity-generational": {
+        "role": "tertiary",
+        "displayName": "Generational",
+        "canonical": "#ff5d73",
+        "oklch": "oklch(69.6% 0.196 15.9)",
+        "tonalRamp": [
+          "oklch(15% 0.196 15.9)",
+          "oklch(26% 0.196 15.9)",
+          "oklch(37% 0.196 15.9)",
+          "oklch(48% 0.196 15.9)",
+          "oklch(59% 0.196 15.9)",
+          "oklch(70% 0.196 15.9)",
+          "oklch(82% 0.196 15.9)",
+          "oklch(95% 0.196 15.9)"
+        ]
+      },
+      "rarity-legend": {
+        "role": "tertiary",
+        "displayName": "Legend",
+        "canonical": "#f4b544",
+        "oklch": "oklch(81.2% 0.144 78.4)",
+        "tonalRamp": [
+          "oklch(15% 0.144 78.4)",
+          "oklch(26% 0.144 78.4)",
+          "oklch(37% 0.144 78.4)",
+          "oklch(48% 0.144 78.4)",
+          "oklch(59% 0.144 78.4)",
+          "oklch(70% 0.144 78.4)",
+          "oklch(82% 0.144 78.4)",
+          "oklch(95% 0.144 78.4)"
+        ]
+      },
+      "rarity-epic": {
+        "role": "tertiary",
+        "displayName": "Epic",
+        "canonical": "#b28cff",
+        "oklch": "oklch(72.3% 0.165 297.3)",
+        "tonalRamp": [
+          "oklch(15% 0.165 297.3)",
+          "oklch(26% 0.165 297.3)",
+          "oklch(37% 0.165 297.3)",
+          "oklch(48% 0.165 297.3)",
+          "oklch(59% 0.165 297.3)",
+          "oklch(70% 0.165 297.3)",
+          "oklch(82% 0.165 297.3)",
+          "oklch(95% 0.165 297.3)"
+        ]
+      },
+      "rarity-rare": {
+        "role": "tertiary",
+        "displayName": "Rare",
+        "canonical": "#5fa8ff",
+        "oklch": "oklch(72.2% 0.147 254)",
+        "tonalRamp": [
+          "oklch(15% 0.147 254)",
+          "oklch(26% 0.147 254)",
+          "oklch(37% 0.147 254)",
+          "oklch(48% 0.147 254)",
+          "oklch(59% 0.147 254)",
+          "oklch(70% 0.147 254)",
+          "oklch(82% 0.147 254)",
+          "oklch(95% 0.147 254)"
+        ]
+      },
+      "rarity-uncommon": {
+        "role": "tertiary",
+        "displayName": "Uncommon",
+        "canonical": "#4cc38a",
+        "oklch": "oklch(73.5% 0.136 159.3)",
+        "tonalRamp": [
+          "oklch(15% 0.136 159.3)",
+          "oklch(26% 0.136 159.3)",
+          "oklch(37% 0.136 159.3)",
+          "oklch(48% 0.136 159.3)",
+          "oklch(59% 0.136 159.3)",
+          "oklch(70% 0.136 159.3)",
+          "oklch(82% 0.136 159.3)",
+          "oklch(95% 0.136 159.3)"
+        ]
+      },
+      "rarity-common": {
+        "role": "tertiary",
+        "displayName": "Common",
+        "canonical": "#8c9cad",
+        "oklch": "oklch(68.6% 0.031 249.9)",
+        "tonalRamp": [
+          "oklch(15% 0.031 249.9)",
+          "oklch(26% 0.031 249.9)",
+          "oklch(37% 0.031 249.9)",
+          "oklch(48% 0.031 249.9)",
+          "oklch(59% 0.031 249.9)",
+          "oklch(70% 0.031 249.9)",
+          "oklch(82% 0.031 249.9)",
+          "oklch(95% 0.031 249.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page heroes and entity names."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section and page headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, metric values, grade letters."
+      },
+      "scoreboard": {
+        "displayName": "Scoreboard",
+        "purpose": "Live and final scores, year-end numerals."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Paragraphs and UI text in Manrope with tabular figures."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Metric labels, table headers, filter labels; sentence case, untracked."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-rest",
+        "value": "0 1px 0 rgb(255 255 255 / .03) inset, 0 10px 28px -12px rgb(0 0 0 / .55)",
+        "purpose": "Every panel, hero and archive band."
+      },
+      {
+        "name": "card-lift",
+        "value": "0 16px 30px -18px rgb(0 0 0 / .8)",
+        "purpose": "Hovered team cards."
+      },
+      {
+        "name": "arena-drop",
+        "value": "0 30px 60px -30px rgb(0 0 0 / .9)",
+        "purpose": "Live-game hero only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "All state transitions and meter fills."
+      },
+      {
+        "name": "state",
+        "value": "150-180ms",
+        "purpose": "Hover and press colour and transform changes."
+      },
+      {
+        "name": "meter-fill",
+        "value": "500-700ms",
+        "purpose": "Strength, lead and league bar width changes."
+      },
+      {
+        "name": "live-pulse",
+        "value": "1.4-1.8s infinite",
+        "purpose": "Live dot and live status only."
+      },
+      {
+        "name": "reduced-motion",
+        "value": ".01ms",
+        "purpose": "prefers-reduced-motion collapses all animation and transition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "1280px"
+      },
+      {
+        "name": "laptop",
+        "value": "1100px"
+      },
+      {
+        "name": "phone",
+        "value": "820px"
+      },
+      {
+        "name": "small",
+        "value": "420px"
+      }
+    ]
   },
-  "fonts": {
-    "display": "Barlow Condensed",
-    "ui": "Manrope"
-  },
-  "signature": "A persistent game command rail and active season bar framing broadcast-grade management surfaces."
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Gold command action: advance, play, next game. One per region.",
+      "html": "<button class=\"ds-btn-primary\">Next game <svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 14px; border: 1px solid var(--gold, #f4b544); border-radius: 8px; background: var(--gold, #f4b544); color: var(--gold-ink, #1a1203); font: 700 .85rem/1 Manrope, sans-serif; cursor: pointer; transition: background .18s cubic-bezier(.16,1,.3,1), transform .18s cubic-bezier(.16,1,.3,1); } .ds-btn-primary:hover { background: #ffc65f; border-color: #ffc65f; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid #f4b544; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default action on dark surfaces.",
+      "html": "<button class=\"ds-btn\">Back to world</button>",
+      "css": ".ds-btn { min-height: 38px; padding: 0 14px; border: 1px solid var(--line-2, #2f4b63); border-radius: 8px; background: var(--panel-2, #172838); color: var(--text, #eef4f9); font: 700 .85rem/1 Manrope, sans-serif; cursor: pointer; transition: background .18s, border-color .18s; } .ds-btn:hover { background: var(--panel-3, #1d3246); border-color: #44688a; } .ds-btn:active { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid #f4b544; outline-offset: 2px; }"
+    },
+    {
+      "name": "Select / Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Sunk field for filters and search.",
+      "html": "<label class=\"ds-filter\"><span>Search</span><input class=\"ds-input\" placeholder=\"Player, team, country\"/></label>",
+      "css": ".ds-filter { display: flex; flex-direction: column; gap: 5px; width: 260px; } .ds-filter > span { color: #8aa0b4; font: 700 .75rem Manrope, sans-serif; } .ds-input { min-height: 38px; padding: 0 12px; border: 1px solid #2f4b63; border-radius: 8px; background: #0b1520; color: #eef4f9; caret-color: #f4b544; font: .88rem Manrope, sans-serif; } .ds-input::placeholder { color: #8aa0b4; } .ds-input:hover { border-color: #44688a; } .ds-input:focus-visible { outline: 2px solid #f4b544; outline-offset: 2px; }"
+    },
+    {
+      "name": "Command Rail",
+      "kind": "nav",
+      "refersTo": "rail-item",
+      "description": "Desktop destinations with authored icons; active item raised with a gold icon; sub-pages open inline.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-rail-item\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c2.6 2.5 3.9 5.5 3.9 9s-1.3 6.5-3.9 9c-2.6-2.5-3.9-5.5-3.9-9S9.4 5.5 12 3Z\"/></svg><span>World</span></button><button class=\"ds-rail-item active\" aria-current=\"page\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"2.6\"/><path d=\"M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14\"/></svg><span>Live</span><i class=\"ds-dot\"></i></button><button class=\"ds-rail-item\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 4h11v16H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1Z\"/><path d=\"M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2h-2M8 8h4M8 12h4M8 16h3\"/></svg><span>Stories</span></button></nav>",
+      "css": ".ds-rail { display: flex; flex-direction: column; gap: 2px; width: 208px; padding: 12px; background: #0a131d; border-right: 1px solid #22374a; } .ds-rail-item { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: #b6c6d4; font: 700 .9rem Manrope, sans-serif; text-align: left; cursor: pointer; transition: background .15s, color .15s; } .ds-rail-item:hover { background: #121f2c; color: #eef4f9; } .ds-rail-item.active { background: #172838; color: #eef4f9; } .ds-rail-item.active svg { color: #f4b544; } .ds-rail-item:focus-visible { outline: 2px solid #f4b544; outline-offset: 2px; } .ds-dot { width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: #ef6b5b; }"
+    },
+    {
+      "name": "Pill Tabs",
+      "kind": "chip",
+      "refersTo": "tab-pill",
+      "description": "In-page filter tabs; active inverts to the text colour.",
+      "html": "<div class=\"ds-tabs\"><button class=\"active\">Magazine</button><button>Iconic stories</button><button>Hall of Fame</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 6px; } .ds-tabs button { min-height: 36px; padding: 0 14px; border: 1px solid #22374a; border-radius: 999px; background: #121f2c; color: #b6c6d4; font: 700 .84rem Manrope, sans-serif; cursor: pointer; } .ds-tabs button:hover { color: #eef4f9; border-color: #2f4b63; } .ds-tabs button.active { background: #eef4f9; border-color: #eef4f9; color: #0a131d; } .ds-tabs button:focus-visible { outline: 2px solid #f4b544; outline-offset: 2px; }"
+    },
+    {
+      "name": "Grade Chip",
+      "kind": "custom",
+      "refersTo": "grade-chip",
+      "description": "Every rating: letter block in grade colour plus the number. S>=88 A>=82 B>=76 C>=70 D>=63 E below.",
+      "html": "<div class=\"ds-grades\"><span class=\"ds-grade\" style=\"--g:#f4b544\"><b>S</b><span>91</span></span><span class=\"ds-grade\" style=\"--g:#4cc38a\"><b>A</b><span>84</span></span><span class=\"ds-grade\" style=\"--g:#5fa8ff\"><b>B</b><span>78</span></span><span class=\"ds-grade\" style=\"--g:#a9b6c4\"><b>C</b><span>72</span></span><span class=\"ds-grade\" style=\"--g:#f2924f\"><b>D</b><span>65</span></span><span class=\"ds-grade\" style=\"--g:#ef6b5b\"><b>E</b><span>58</span></span></div>",
+      "css": ".ds-grades { display: flex; gap: 8px; flex-wrap: wrap; } .ds-grade { display: inline-flex; align-items: center; height: 32px; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--g) 16%, #0b1520); border: 1px solid color-mix(in srgb, var(--g) 55%, transparent); font-variant-numeric: tabular-nums; } .ds-grade b { display: grid; place-items: center; align-self: stretch; min-width: 26px; padding: 0 6px; background: var(--g); color: #0b1218; font: 800 1.15rem/1 'Barlow Condensed', Manrope, sans-serif; } .ds-grade span { padding: 0 9px 0 8px; color: #eef4f9; font: 700 1.05rem/1 'Barlow Condensed', Manrope, sans-serif; }"
+    },
+    {
+      "name": "Strength Meters",
+      "kind": "custom",
+      "refersTo": "grade-chip",
+      "description": "League-relative 50-99 meters, each filled in the grade colour of its value.",
+      "html": "<div class=\"ds-sbars\"><div class=\"ds-sbar\"><span>Perimeter</span><span class=\"t\"><i style=\"width:79.6%;background:#f4b544\"></i></span><b>89</b></div><div class=\"ds-sbar\"><span>Interior</span><span class=\"t\"><i style=\"width:63.3%;background:#5fa8ff\"></i></span><b>81</b></div><div class=\"ds-sbar\"><span>Defense</span><span class=\"t\"><i style=\"width:44.9%;background:#a9b6c4\"></i></span><b>72</b></div><div class=\"ds-sbar\"><span>Rebounding</span><span class=\"t\"><i style=\"width:30.6%;background:#f2924f\"></i></span><b>65</b></div></div>",
+      "css": ".ds-sbars { display: grid; gap: 6px; width: 320px; padding: 16px; background: #121f2c; border-radius: 12px; } .ds-sbar { display: grid; grid-template-columns: 76px 1fr 26px; align-items: center; gap: 10px; font: .78rem Manrope, sans-serif; } .ds-sbar > span:first-child { color: #8aa0b4; font-weight: 700; } .ds-sbar .t { position: relative; height: 6px; border-radius: 6px; background: #0b1520; overflow: hidden; } .ds-sbar .t i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; } .ds-sbar b { color: #b6c6d4; text-align: right; }"
+    },
+    {
+      "name": "Live Lead Bar",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Tug bar filling from the centre toward the leader in the leader's lifted team colour, with swatches and a verbal margin.",
+      "html": "<div class=\"ds-tug\"><span class=\"n\" style=\"--sw:#5f8cff\">Duke</span><div class=\"tr\"><span class=\"fa\" style=\"width:24%\"></span><i></i></div><span class=\"n b\" style=\"--sw:#ef6b5b\">UCLA</span><strong>Duke by 8</strong></div>",
+      "css": ".ds-tug { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 6px 14px; width: 420px; padding: 16px; background: #0f1d2b; border-radius: 14px; font-family: Manrope, sans-serif; } .ds-tug .n { display: inline-flex; align-items: center; gap: 6px; color: #eef4f9; font-size: .78rem; font-weight: 800; } .ds-tug .n::before { content: \"\"; width: 10px; height: 10px; border-radius: 3px; background: var(--sw); } .ds-tug .n.b { flex-direction: row-reverse; } .ds-tug .tr { position: relative; height: 12px; border-radius: 12px; background: #0b1520; overflow: hidden; } .ds-tug .fa { position: absolute; top: 0; bottom: 0; right: 50%; background: linear-gradient(270deg, #5f8cff, rgb(95 140 255 / .6)); border-radius: 12px 0 0 12px; } .ds-tug i { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; opacity: .7; } .ds-tug strong { grid-column: 1 / 4; justify-self: center; color: #eef4f9; font: 700 1.1rem/1 'Barlow Condensed', sans-serif; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Broadcast Command Center",
+    "overview": "The simulator is presented as a live global sports broadcast. A midnight command rail holds the six destinations; a sticky season bar keeps the current moment and the next action in view; content plays inside a deep arena-blue stage built for long sessions. Everything is one dark theme: there is no light mode and no light card floating on dark ground. Depth comes from stepping navy surfaces lighter, not from contrast flips.\n\nDensity is broadcast-graphic, not spreadsheet. Numbers are set in a condensed display face at scoreboard scale, every rating reads as a letter grade before it reads as a number, and the four team strengths are drawn as meters scaled against the league so differences between real teams are visible. Team identity arrives through badges, swatches, and tinted washes; it never carries small text.\n\nPrestige is warm, everything else is cool. Gold marks command and honor; the grade and rarity scales carry their own fixed hues; team colours are lifted to read on dark and are kept apart from gold.",
+    "keyCharacteristics": [
+      "One dark arena theme: void → rail → stage → panel → panel-2 → panel-3, all navy.",
+      "Condensed display numerals (Barlow Condensed) over a Manrope UI layer with tabular figures everywhere.",
+      "S–E letter grades on one world-wide threshold scale; league-relative strength meters.",
+      "Compact icon rail with inline sub-pages on desktop; sticky season bar; six-tab bottom bar on phone.",
+      "Authored 24px / 1.8-stroke line icons; no emoji or glyph icons."
+    ],
+    "rules": [
+      {
+        "name": "The Gold Is Earned Rule",
+        "body": "Gold means command (primary action, active location, current moment) or prestige (S grade, titles, honors). It is never a team colour, a category tint, or decoration. When two team colours collide, the fallback is blue or red, never gold.",
+        "section": "colors"
+      },
+      {
+        "name": "The Swatch Not Script Rule",
+        "body": "Team identity colours appear as badges, swatches, meter fills, underline marks, and low-opacity washes. Text in a team colour is not allowed; names stay in `text`.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lifted Jersey Rule",
+        "body": "Team colours are authored for white jerseys. Before use on dark, lift any colour below 0.16 relative luminance by raising lightness at constant hue (saturation floored at 0.62); near-greys become `#c9d6e2`. Two teams within 42° hue and 0.18 luminance of each other are separated by swapping the second to blue or red.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Eyebrow Rule",
+        "body": "Nothing sits above a heading. Context (country, region, status) goes on a metadata line below the heading in sentence case, untracked. No uppercase tracked kickers.",
+        "section": "typography"
+      },
+      {
+        "name": "The Condensed Numbers Rule",
+        "body": "Any number that is the point of its element (score, grade, rating, stat, year) is set in the display face, bold, tabular.",
+        "section": "typography"
+      },
+      {
+        "name": "The Navy Steps Rule",
+        "body": "Raise a surface by moving one step up the navy ladder, never by switching to a light surface or adding a coloured edge.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do show every rating as a grade chip using the 88 / 82 / 76 / 70 / 63 thresholds.",
+      "Do pass every team colour through the lift rule before it touches a dark surface, and separate colliding pairs with blue or red.",
+      "Do mark a leader with the leader's team colour as a fill, swatch, or underline, and say the margin in words.",
+      "Do scale any live chart or meter only from information already revealed.",
+      "Do use the authored 24px, 1.8-stroke, round-cap icon set for every icon.",
+      "Do keep text at `text-3` or brighter on any surface."
+    ],
+    "donts": [
+      "Don't introduce a light theme, light cards, or a second palette.",
+      "Don't use gold for team identity, category tints, or decoration.",
+      "Don't set text in a team colour.",
+      "Don't put an eyebrow or tracked uppercase label above a heading.",
+      "Don't mark state with a coloured side stripe on cards, rows, or callouts.",
+      "Don't use emoji or text glyphs as icons.",
+      "Don't shrink table type on phones; let the table scroll."
+    ]
+  }
 }
